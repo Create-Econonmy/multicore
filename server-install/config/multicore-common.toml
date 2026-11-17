@@ -1,0 +1,64 @@
+[general]
+	#Tick each dimension on its own thread.
+	#If false the server ticks exactly like vanilla NeoForge.
+	enabled = true
+	#Dimensions that always tick on the main server thread, after the parallel phase.
+	#Example: ["minecraft:the_end", "multiworld:shop"]
+	serialDimensions = []
+	#If a dimension thread throws a threading error (ConcurrentModificationException and similar),
+	#log it, switch MultiCore off for the rest of the session and keep the server running where possible.
+	fallbackToSerialOnError = true
+	#Log a warning with thread dumps when the parallel phase takes longer than this (milliseconds).
+	# Default: 10000
+	# Range: 500 ~ 600000
+	slowPhaseWarnMs = 10000
+
+[compatibility]
+	#Code from mods that are not in threadSafeMods (their block entities, entities, block ticks
+	#and event listeners) never runs on two dimension threads at the same time.
+	#Vanilla content and thread-safe mods still run fully in parallel.
+	#Turning this off is faster but only safe if every mod is thread-safe.
+	serializeUnsafeMods = true
+	#Mod ids whose content may run on several dimension threads at once.
+	#Only add a mod after checking it keeps no shared state between dimensions.
+	threadSafeMods = ["minecraft", "neoforge", "multicore"]
+	#Single event listeners that may run on several dimension threads at once, as "modid:EventName"
+	#(nested events with $, e.g. "curios:EntityTickEvent$Post"). /multicore locks shows the busiest ones.
+	#Only add a listener after checking it only touches the entity or level it is given.
+	threadSafeListeners = ["create:EntityTickEvent$Pre", "create:LivingBreatheEvent", "citadel:EntityTickEvent$Post", "fluid:EntityTickEvent$Pre", "blocksyouneed_luna:EntityTickEvent$Pre"]
+	#When code on one dimension thread moves an entity into, or spawns an entity in, another dimension,
+	#do it at the end of the tick on the main thread instead of immediately.
+	deferCrossDimensionWrites = true
+	#Log the first time each mod reaches into another dimension from a dimension thread (with a stack trace).
+	logCrossDimensionAccess = true
+
+[autoAdjust]
+	#Adjust the regions (one per dimension) to the load every 5 seconds:
+	#- a dimension with no players whose tick costs less than idleMs ticks on the main thread instead of its own,
+	#  and gets its own thread back when a player enters or its tick costs more than busyMs;
+	#- when the server is busy (parallel tick over loadMs) but parallel ticking is less than minSpeedup times
+	#  faster than one thread for 30 seconds, tick like vanilla for retryMinutes, then measure again
+	#  (the wait doubles each time it still does not help, up to an hour).
+	#/multicore status shows what it decided and why.
+	enabled = true
+	#A dimension without players whose tick costs less than this (ms) is idle.
+	# Default: 0.5
+	# Range: 0.0 ~ 50.0
+	idleMs = 0.5
+	#An idle dimension whose tick costs more than this (ms) gets its own thread back.
+	# Default: 2.0
+	# Range: 0.0 ~ 50.0
+	busyMs = 2.0
+	#Only judge the speedup when the parallel tick takes at least this long (ms).
+	# Default: 10.0
+	# Range: 0.0 ~ 1000.0
+	loadMs = 10.0
+	#Under load, parallel ticking must be at least this many times faster than one thread.
+	#1.0 never falls back.
+	# Default: 1.05
+	# Range: 1.0 ~ 16.0
+	minSpeedup = 1.05
+	#How long to tick on one thread before measuring parallel ticking again (minutes).
+	# Default: 10
+	# Range: 1 ~ 60
+	retryMinutes = 10

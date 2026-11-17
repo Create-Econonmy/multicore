@@ -1,0 +1,128 @@
+plugins {
+    id 'java-library'
+    id 'idea'
+    id 'net.neoforged.moddev' version '2.0.144'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+repositories {
+    maven { url = 'https://maven.parchmentmc.org' }
+    flatDir { dirs 'libs' }
+}
+
+sourceSets {
+    test {
+        // Plain JUnit tests for the scheduler core; they do not load Minecraft.
+        java.srcDirs = ['src/test/java']
+    }
+    // Stand-alone tool that scans a mods folder and reports thread-safety hazards. Not part of the mod jar.
+    analyzer {
+        java.srcDirs = ['src/analyzer/java']
+    }
+}
+
+neoForge {
+    version = project.neo_version
+
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
+
+    runs {
+        server {
+            server()
+            programArgument '--nogui'
+            // -PserverDir=run/server-light -PserverRam=512M for a small test server (see tools/local-server.ps1).
+            gameDirectory = project.file(project.findProperty('serverDir') ?: 'run/server')
+            jvmArgument "-Xmx${project.findProperty('serverRam') ?: '6G'}"
+            systemProperty 'forge.logging.console.level', 'info'
+            systemProperty 'mixin.debug.export', 'false'
+        }
+        gameTestServer {
+            type = 'gameTestServer'
+            // -PgametestDir=run/gametest-light -PgametestRam=512M: only the jars in that folder's mods/ (fits in 512 MB).
+            gameDirectory = project.file(project.findProperty('gametestDir') ?: 'run/gametest')
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            jvmArgument "-Xmx${project.findProperty('gametestRam') ?: '6G'}"
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+dependencies {
+    // Mods from the server pack that MultiCore has compat patches for.
+    // Copied into libs/ by tools/sync-libs.ps1 (not committed). Compile-only: they are never bundled.
+    fileTree(dir: 'libs', include: '*.jar').each { compileOnly files(it) }
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    analyzerImplementation 'org.ow2.asm:asm-tree:9.7.1'
+    analyzerImplementation 'com.google.code.gson:gson:2.11.0'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+// Lets tools/local-server.ps1 type console commands into the local test server.
+tasks.withType(JavaExec).matching { it.name == 'runServer' }.configureEach {
+    standardInput = System.in
+}
+
+// Usage: gradlew analyzePack -Pmods="<path to mods folder>" [-Pout=build/pack-report]
+tasks.register('analyzePack', JavaExec) {
+    group = 'multicore'
+    description = 'Scans a mods folder for mixins and thread-safety hazards.'
+    classpath = sourceSets.analyzer.runtimeClasspath
+    mainClass = 'com.multicore.analyzer.PackAnalyzer'
+    args(project.findProperty('mods') ?: 'run/server/mods', project.findProperty('out') ?: 'build/pack-report')
+}
+
+var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    var replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version            : neo_version,
+            neo_version_range      : neo_version_range,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from 'src/main/templates'
+    into 'build/generated/sources/modMetadata'
+}
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xlint:deprecation'
+}
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}

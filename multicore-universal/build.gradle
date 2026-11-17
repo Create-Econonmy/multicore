@@ -1,0 +1,161 @@
+plugins {
+    id 'java-library'
+    id 'idea'
+    id 'net.neoforged.moddev' version '2.0.144'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+var gametestDir = project.findProperty('gametestDir') ?: 'run/gametest'
+
+repositories {
+    maven { url = 'https://maven.parchmentmc.org' }
+}
+
+sourceSets {
+    test {
+        // Plain JUnit tests (lock semantics, woven code); they do not start Minecraft.
+        java.srcDirs = ['src/test/java']
+    }
+    // A deliberately thread-unsafe mod (static HashMaps, capture fields between mixin hooks, synchronized methods)
+    // with GameTests that fail if MultiCore Universal lets its code race. Never part of the mod jar.
+    testmod
+    // Empty: the classpath of the local test servers, which load the built jars from their mods folder exactly like a
+    // real server does (the coremod only loads from a jar).
+    harness
+}
+
+neoForge {
+    version = project.neo_version
+
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
+
+    addModdingDependenciesTo(sourceSets.testmod)
+    addModdingDependenciesTo(sourceSets.harness)
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+
+    runs {
+        server {
+            server()
+            programArgument '--nogui'
+            gameDirectory = project.file('run/server')
+            sourceSet = sourceSets.harness
+            loadedMods = []
+            // The owner asked for a half-gigabyte limit on the local test server while they use the computer (enough for
+            // a light mod set only); -PserverRam=6G for full-pack runs when they are away.
+            jvmArgument "-Xmx${project.findProperty('serverRam') ?: '512M'}"
+            systemProperty 'forge.logging.console.level', 'info'
+        }
+        gameTestServer {
+            type = 'gameTestServer'
+            // run/gametest holds the full pack. -PgametestDir=run/gametest-light -PgametestRam=512M runs the tests with
+            // only MultiCore Universal and the test mod, within the half-gigabyte limit.
+            gameDirectory = project.file(gametestDir)
+            sourceSet = sourceSets.harness
+            loadedMods = []
+            systemProperty 'neoforge.enabledGameTestNamespaces', "${mod_id},mcu_testmod"
+            jvmArgument "-Xmx${project.findProperty('gametestRam') ?: '6G'}"
+        }
+    }
+}
+
+dependencies {
+    compileOnly project(':coremod')
+    jarJar(project(':coremod'))
+
+    testImplementation project(':coremod')
+    testImplementation 'org.ow2.asm:asm:9.7.1'
+    testImplementation 'org.ow2.asm:asm-tree:9.7.1'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    var replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version            : neo_version,
+            neo_version_range      : neo_version_range,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from 'src/main/templates'
+    into 'build/generated/sources/modMetadata'
+}
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
+
+var testmodJar = tasks.register('testmodJar', Jar) {
+    from sourceSets.testmod.output
+    archiveBaseName = 'mcu_testmod'
+    archiveVersion = '1.0.0'
+    destinationDirectory = layout.buildDirectory.dir('testmod')
+}
+
+// The local test servers load the real jars (with the nested coremod) from their mods folders.
+// -PserverTestmod also puts the unsafe test mod on the local dedicated server.
+var installServerJar = tasks.register('installServerJar', Copy) {
+    from tasks.named('jar')
+    if (project.hasProperty('serverTestmod')) {
+        from testmodJar
+    }
+    into 'run/server/mods'
+}
+// -PnoTestmod leaves the deliberately unsafe test mod out (its whole-method locks distort pack benchmarks).
+var withTestmod = !project.hasProperty('noTestmod')
+var installGameTestJars = tasks.register('installGameTestJars', Copy) {
+    from tasks.named('jar')
+    if (withTestmod) {
+        from testmodJar
+    }
+    into "${gametestDir}/mods"
+    doFirst {
+        if (!withTestmod) {
+            project.delete(fileTree("${gametestDir}/mods") { include 'mcu_testmod-*.jar' })
+        }
+    }
+}
+tasks.matching { it.name == 'runServer' }.configureEach {
+    dependsOn installServerJar
+    // Lets tools/local-server.ps1 type console commands into the local test server.
+    standardInput = System.in
+}
+tasks.matching { it.name == 'runGameTestServer' }.configureEach { dependsOn installGameTestJars }
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xlint:deprecation'
+}
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}

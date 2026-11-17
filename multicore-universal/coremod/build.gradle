@@ -1,0 +1,64 @@
+plugins {
+    id 'java-library'
+}
+
+group = 'com.multicore.universal'
+version = mod_version
+base.archivesName = 'multicore_universal-coremod'
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.neoforged.net/releases' }
+    maven { url = 'https://maven.fabricmc.net' }
+}
+
+dependencies {
+    // Provided by NeoForge's launcher at runtime.
+    compileOnly('net.neoforged.fancymodloader:loader:4.0.44') { transitive = false }
+    compileOnly('cpw.mods:modlauncher:11.0.5') { transitive = false }
+    compileOnly('cpw.mods:securejarhandler:3.0.8') { transitive = false }
+    compileOnly 'org.ow2.asm:asm:9.7.1'
+    compileOnly 'org.ow2.asm:asm-tree:9.7.1'
+    compileOnly 'org.ow2.asm:asm-analysis:9.7.1'
+    compileOnly 'org.slf4j:slf4j-api:2.0.9'
+    compileOnly 'com.google.code.findbugs:jsr305:3.0.2'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.ow2.asm:asm:9.7.1'
+    testImplementation 'org.ow2.asm:asm-tree:9.7.1'
+    testImplementation 'org.ow2.asm:asm-util:9.7.1'
+    testImplementation 'org.ow2.asm:asm-analysis:9.7.1'
+    testImplementation 'org.slf4j:slf4j-api:2.0.9'
+    testImplementation 'com.google.code.findbugs:jsr305:3.0.2'
+    testImplementation('net.neoforged.fancymodloader:loader:4.0.44') { transitive = false }
+    testImplementation('cpw.mods:modlauncher:11.0.5') { transitive = false }
+}
+
+jar {
+    manifest {
+        // A library on NeoForge's plugin layer, where coremods are loaded from.
+        attributes('FMLModType': 'LIBRARY', 'Automatic-Module-Name': 'multicore.universal.coremod')
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// Diagnostic: gradlew :coremod:test -PprobeJar=path/to/mod.jar runs the frame probe over a real jar.
+test {
+    if (project.hasProperty('probeJar')) {
+        systemProperty 'probeJar', project.property('probeJar')
+    }
+    if (project.hasProperty('scopedClass')) {
+        systemProperty 'scopedClass', project.property('scopedClass')
+        testLogging.showStandardStreams = true
+        testLogging.showStandardStreams = true
+    }
+}

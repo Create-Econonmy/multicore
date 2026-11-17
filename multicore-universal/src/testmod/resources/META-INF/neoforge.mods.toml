@@ -1,0 +1,19 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="mcu_testmod"
+version="1.0.0"
+displayName="MultiCore Universal test mod (deliberately thread-unsafe)"
+description='''Shared static collections, capture fields between mixin hooks, a synchronized singleton. Only for MultiCore Universal's GameTests.'''
+
+[[mixins]]
+config="mcu_testmod.mixins.json"
+
+[[dependencies.mcu_testmod]]
+modId="neoforge"
+type="required"
+versionRange="[21.1,)"
+ordering="NONE"
+side="BOTH"

@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.multicore.testmod.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "LivingEntityCaptureMixin",
+    "LivingEntityScopedFlagMixin",
+    "MobHookMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

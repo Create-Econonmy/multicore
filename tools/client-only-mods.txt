@@ -1,0 +1,23 @@
+# Jar name prefixes that are client-only and are left out of the local test server.
+# Keep this in sync with what is actually in the server's mods folder.
+iris-
+sodium-neoforge
+sodium-extra
+ImmediatelyFast
+entityculling
+chat_heads
+freecam
+notenoughanimations
+dynamic-fps
+FpsOverlay
+MouseTweaks
+better-advanced-tooltips
+fullbrightnesstoggle
+reforgedplaymod
+particle_core
+colorwheel
+aeronautics_replay
+crash_assistant
+CrashAssistant
+# Not client-only, but Sable declares it incompatible, so the pack cannot boot with both:
+ScalableLux

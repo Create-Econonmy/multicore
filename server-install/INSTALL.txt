@@ -1,0 +1,106 @@
+MULTICORE SERVER 0.1.0 - SERVER INSTALL KIT  (mod id: multicore)
+================================================================================
+NOT installed on the server. Everything here is staged only.
+
+WHAT IT DOES
+Each dimension (South, Multiworld's shop/north/war/creative, hub, nether, end)
+ticks on its own CPU thread instead of one after another. Mod code that has
+not been checked as thread-safe (that includes Create Economy Money, Ranks and
+the Launcher) still runs one at a time behind a shared lock, so those mods
+work exactly as before.
+
+Server-side only. Players do NOT need it, and it must NOT go in the modpack or
+the launcher's mirrorMods list.
+
+FILES
+  mods/multicore-0.1.0.jar        the mod
+  config/multicore-common.toml    default config (created on first start anyway)
+
+TESTED WITH THE NEW MODS
+  Tested with the full pack plus every Create Economy mod released since
+  September (see the test notes at the bottom). Money, Ranks and the
+  Launcher do their per-tick work on the main thread (server tick, commands,
+  clicks); the one hook that runs on a dimension thread (cemoney's coin
+  pickup) takes MultiCore's mod lock.
+
+INSTALL (server stopped; take a backup of the world first)
+1. Copy mods/multicore-0.1.0.jar into the server's mods/.
+2. Leave dimthread installed for the first start. While its gamerule
+   dimthread_active is true (the default), MultiCore stands by and does
+   nothing, so the first start is the same as today.
+3. ScalableLux + Sable: Sable 2.0.5 declares ScalableLux incompatible. If the
+   server starts today it already has a way around this; nothing changes here.
+4. Start. latest.log shows "[MultiCore]" lines saying it is standing by
+   because dimthread is active.
+
+TURNING IT ON (live, no restart; op level 3)
+  /gamerule dimthread_active false     MultiCore takes over right away
+  /multicore status                    mode, tick times per dimension
+  /multicore locks                     which mods wait on the lock the most
+  spark tps / /spark profiler          compare with before
+
+AUTO-ADJUST (on by default, config [autoAdjust] in multicore-common.toml)
+  Every 5 seconds MultiCore looks at how much each world costs:
+  - A world with no players that costs under 0.5 ms (an empty Shop at night,
+    the End) ticks on the main thread instead of waking its own thread. It gets
+    its own thread back the moment a player enters or it costs over 2 ms.
+  - If the server is busy (over 10 ms per tick) but running the worlds in
+    parallel is not at least 1.05x faster than one thread for 30 seconds
+    (everything stuck behind the shared mod lock), MultiCore ticks like vanilla
+    for 10 minutes and then tries again. Each failed try doubles the wait, up
+    to an hour. So it can never stay slower than vanilla.
+  /multicore status shows each world's thread, average cost and players, plus
+  the last decision and why. /multicore auto off|on switches it until restart.
+  It does NOT split one world (South) into several threads; see README.
+
+TURNING IT OFF AGAIN (instant, no restart)
+  /multicore off                       plain single-thread ticking
+  or /gamerule dimthread_active true   back to dimthread
+If MultiCore detects a threading error it logs it and switches itself to
+single-thread ticking for the rest of the session (fallbackToSerialOnError).
+
+REMOVING IT
+  Stop the server and delete mods/multicore-0.1.0.jar. It stores nothing in
+  the world.
+
+ONCE IT HAS RUN WELL FOR A FEW DAYS
+  Remove dimthread from mods/ (its NeoForge port gives almost no parallelism
+  and stops some mods, such as Open Parties and Claims, from doing work during
+  world ticks).
+
+TEST NOTES (2026-11-15, local test server only)
+  Mod list: tools/server-mods-2026-11-15.txt = the server's 2026-09-30 list
+  plus the Create Economy mods released since (Money 1.0.0, Ranks 1.6.0,
+  Launcher 1.0.0, Votifier, Server Fixes 1.5.1, Chat Filter 1.1.0, Items Fix
+  1.1.0, Sable Chunk Guard, Better Targeting 1.0.0.1, Warpanautics, Ender
+  Transmission Secure, Anticheat Bugfinder, Wrench Dupe Guard): 210 jars,
+  209 tested (Multiworld isn't available locally; ScalableLux can't start
+  next to Sable). It was NOT read from the server, so compare it with the
+  real mods/ folder before installing.
+
+  With auto-adjust (2026-11-15, later): 25/25 tests (2 new auto-adjust tests)
+  plus 8 unit tests pass, full pack, no MultiCore-only errors.
+
+  Full GameTest suite + brute-force test (every block entity and entity type
+  of all 209 mods in overworld, nether and end at once, MultiCore on, then
+  off), 3 runs: 23/23 tests passed each time, MultiCore stayed parallel, and
+  no error happened only with MultiCore on.
+
+  Two MultiCore bugs found and fixed on the way (both could crash the server
+  or lose block data with the full pack):
+  - Mod block entities' onLoad / setRemoved / chunk-unload hooks ran outside
+    the mod lock. Create: Mobile Packages' Bee Port crashed Create's shared
+    logistics list (ConcurrentModificationException).
+  - Mod block entities and entities saved/loaded with their chunk outside the
+    lock. Supplementaries' Doormat failed to save (shared codec cache).
+
+  Mod combinations that do not start (not MultiCore's doing):
+  - Better Targeting 1.1.0.2 needs Create Radar 5.x, but CBC Aeronautics
+    Missiles 0.2.0 needs Radar below 0.5. Better Targeting 1.1 also refuses to
+    start next to the Warpanautics jar (it is built in now).
+  - Electronic Warfare 1.1.0 needs Better Targeting 1.1; Electronic Warfare
+    1.0.1 crashes on its first block entity tick without CC: Tweaked
+    (NoClassDefFoundError dan200/computercraft/...), MultiCore on or off.
+    Electronic Warfare was left out of the test.
+
+jar sha256: 963f53936e193ac37a1f8d99560d3588dd2a7a605bfad9c1ca22100f146b8eb1

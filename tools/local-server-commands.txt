@@ -1,0 +1,45 @@
+# Live test on the local dedicated server with the real server's mods (see tools/local-server.ps1).
+wait Done \(
+multicore status
+# A new world starts with dimthread switched on: MultiCore must stand by.
+sleep 15
+multicore status
+gamerule dimthread_active false
+sleep 5
+multicore status
+# Keep a patch of every dimension loaded and pre-generate chunks in three dimensions at once.
+forceload add -48 -48 48 48
+execute in minecraft:the_nether run forceload add -48 -48 48 48
+execute in minecraft:the_end run forceload add -48 -48 48 48
+chunky world minecraft:overworld
+chunky radius 300
+chunky start
+chunky world minecraft:the_nether
+chunky radius 300
+chunky start
+chunky world minecraft:the_end
+chunky radius 300
+chunky start
+# Mobs in all three dimensions while chunks generate.
+execute in minecraft:overworld run summon minecraft:zombie 0 100 0
+execute in minecraft:the_nether run summon minecraft:ghast 0 100 0
+execute in minecraft:the_end run summon minecraft:enderman 0 70 0
+sleep 90
+chunky progress
+multicore status
+multicore locks
+spark tps
+sleep 60
+chunky progress
+multicore status
+# Switch dimthread back on while running, then off again: no double ticking, clean hand-over.
+gamerule dimthread_active true
+sleep 10
+multicore status
+gamerule dimthread_active false
+sleep 10
+multicore status
+chunky cancel
+save-all flush
+sleep 10
+stop

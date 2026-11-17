@@ -1,0 +1,53 @@
+# Live test on the local dedicated server (see tools/local-server.ps1), with the deliberately thread-unsafe test mod
+# (-GradleArgs -PserverTestmod). Works with any mod list; the dimthread lines are harmless without dimthread.
+wait Done \(
+multicore status
+# dimthread (on the owner's server) also threads dimensions; MultiCore stands by until it is switched off.
+gamerule dimthread_active false
+sleep 5
+multicore status
+# Keep a patch of every dimension loaded, with racers (the test mod's unsafe block entities) in each.
+forceload add -32 -32 32 32
+execute in minecraft:the_nether run forceload add -32 -32 32 32
+execute in minecraft:the_end run forceload add -32 -32 32 32
+sleep 10
+execute in minecraft:overworld run fill 0 250 0 7 250 5 mcu_testmod:racer
+execute in minecraft:the_nether run fill 0 120 0 7 120 5 mcu_testmod:racer
+execute in minecraft:the_end run fill 0 120 0 7 120 5 mcu_testmod:racer
+execute in minecraft:overworld run summon minecraft:pig 0 252 0
+execute in minecraft:the_nether run summon minecraft:pig 0 122 0
+execute in minecraft:the_end run summon minecraft:pig 0 122 0
+mcutest start
+# Generate chunks in three dimensions at once while the racers run.
+chunky world minecraft:overworld
+chunky radius 200
+chunky start
+chunky world minecraft:the_nether
+chunky radius 200
+chunky start
+chunky world minecraft:the_end
+chunky radius 200
+chunky start
+sleep 60
+chunky progress
+multicore status
+mcutest report
+spark tps
+sleep 60
+multicore status
+multicore locks
+mcutest report
+# The same work on one thread, for comparison.
+multicore off
+sleep 30
+multicore status
+spark tps
+multicore on
+sleep 30
+multicore status
+spark tps
+mcutest report
+chunky cancel
+save-all flush
+sleep 15
+stop
