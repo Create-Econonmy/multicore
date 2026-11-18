@@ -126,3 +126,12 @@ Tests:
   folder holds the full pack and needs about 6 GB.
 - `./tools/local-server.ps1 -GradleArgs -PserverTestmod`: a real dedicated server in `run/server` (512 MB heap, as
   requested), driven by `tools/local-server-commands.txt`, stopped at the end.
+
+## One thread, several dimensions
+
+One dimension thread runs 2 to 6 dimensions: light dimensions (the Nether, the End, a quiet hub or shop world) share a
+thread and tick one after another on it, up to `maxDimensionsPerThread` (6) per thread or about `threadTargetMs`
+(10 ms) of tick time; a heavy dimension gets a thread of its own. The grouping follows the measured tick times every
+5 seconds. `threadGroups` pins dimensions together, `maxThreads` caps the threads (0 = logical cores - 2). Dimensions on
+the same thread change each other directly (no deferring). Same as MultiCore.
+

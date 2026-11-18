@@ -64,6 +64,11 @@ public final class MultiCore {
                 MultiCoreConfig.SERIAL_DIMENSIONS.get(),
                 MultiCoreConfig.FALLBACK_TO_SERIAL_ON_ERROR.get(),
                 MultiCoreConfig.SLOW_PHASE_WARN_MS.get());
+        // The GameTest server keeps one dimension per thread: its tests check that dimensions tick in parallel.
+        boolean gameTests = System.getProperty("neoforge.enabledGameTestNamespaces") != null;
+        ParallelTicker.get().configureGroups(new com.multicore.universal.core.ThreadGroups.Settings(MultiCoreConfig.MAX_THREADS.get(),
+                gameTests ? 1 : MultiCoreConfig.MAX_DIMENSIONS_PER_THREAD.get(), MultiCoreConfig.THREAD_TARGET_MS.get()),
+                gameTests ? java.util.List.of() : MultiCoreConfig.THREAD_GROUPS.get());
         ModPolicy.configure(MultiCoreConfig.SERIALIZE_UNSAFE_MODS.get(), MultiCoreConfig.THREAD_SAFE_MODS.get());
         CrossDimension.setDeferWrites(MultiCoreConfig.DEFER_CROSS_DIMENSION_WRITES.get());
         CrossLevel.setLogging(MultiCoreConfig.LOG_CROSS_DIMENSION_ACCESS.get());

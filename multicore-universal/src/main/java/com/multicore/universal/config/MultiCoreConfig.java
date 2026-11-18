@@ -11,6 +11,10 @@ public final class MultiCoreConfig {
 
     public static final ModConfigSpec.BooleanValue ENABLED;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> SERIAL_DIMENSIONS;
+    public static final ModConfigSpec.IntValue MAX_THREADS;
+    public static final ModConfigSpec.IntValue MAX_DIMENSIONS_PER_THREAD;
+    public static final ModConfigSpec.DoubleValue THREAD_TARGET_MS;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> THREAD_GROUPS;
     public static final ModConfigSpec.BooleanValue SERIALIZE_UNSAFE_MODS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> THREAD_SAFE_MODS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> TRANSFORM_EXCLUSIONS;
@@ -31,6 +35,20 @@ public final class MultiCoreConfig {
                         "Dimensions that always tick on the main server thread, after the parallel phase.",
                         "Example: [\"minecraft:the_end\", \"somemod:some_dimension\"]")
                 .defineListAllowEmpty("serialDimensions", List.of(), () -> "", o -> o instanceof String);
+        MAX_THREADS = b.comment(
+                        "At most this many dimension threads (0 = the CPU's logical cores minus 2, at least 2).")
+                .defineInRange("maxThreads", 0, 0, 256);
+        MAX_DIMENSIONS_PER_THREAD = b.comment(
+                        "One dimension thread runs several dimensions, one after another: light dimensions (the Nether,",
+                        "the End, a quiet hub...) share a thread, up to this many per thread; a heavy one gets its own.")
+                .defineInRange("maxDimensionsPerThread", 6, 1, 64);
+        THREAD_TARGET_MS = b.comment(
+                        "Dimensions are added to a thread until it has about this much tick time (milliseconds, measured).")
+                .defineInRange("threadTargetMs", 10.0, 0.1, 1000.0);
+        THREAD_GROUPS = b.comment(
+                        "Dimensions that always share one thread, one entry per thread.",
+                        "Example: [\"minecraft:the_nether, minecraft:the_end, multiworld:hub\"]")
+                .defineListAllowEmpty("threadGroups", List.of(), () -> "", o -> o instanceof String);
         FALLBACK_TO_SERIAL_ON_ERROR = b.comment(
                         "If a dimension thread throws a threading error (ConcurrentModificationException and similar),",
                         "log it, switch MultiCore off for the rest of the session and keep the server running where possible.")
