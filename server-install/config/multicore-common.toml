@@ -5,6 +5,22 @@
 	#Dimensions that always tick on the main server thread, after the parallel phase.
 	#Example: ["minecraft:the_end", "multiworld:shop"]
 	serialDimensions = []
+	#At most this many dimension threads (0 = the CPU's logical cores minus 2, at least 2).
+	# Default: 0
+	# Range: 0 ~ 256
+	maxThreads = 0
+	#One dimension thread runs several dimensions, one after another: light dimensions (the Nether,
+	#the End, a quiet hub...) share a thread, up to this many per thread; a heavy one gets its own.
+	# Default: 6
+	# Range: 1 ~ 64
+	maxDimensionsPerThread = 6
+	#Dimensions are added to a thread until it has about this much tick time (milliseconds, measured).
+	# Default: 10.0
+	# Range: 0.1 ~ 1000.0
+	threadTargetMs = 10.0
+	#Dimensions that always share one thread, one entry per thread.
+	#Example: ["minecraft:the_nether, minecraft:the_end, multiworld:hub"]
+	threadGroups = []
 	#If a dimension thread throws a threading error (ConcurrentModificationException and similar),
 	#log it, switch MultiCore off for the rest of the session and keep the server running where possible.
 	fallbackToSerialOnError = true

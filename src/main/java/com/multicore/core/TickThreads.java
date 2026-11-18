@@ -79,6 +79,6 @@ public final class TickThreads {
      * levels, whose chunk tasks it runs while waiting).
      */
     public static boolean isForeignLevelThread(Level level) {
-        return Thread.currentThread() instanceof LevelThread t && parallelPhase && t.level() != level && isRealLevel(level);
+        return Thread.currentThread() instanceof LevelThread t && parallelPhase && !t.owns(level) && isRealLevel(level);
     }
 }

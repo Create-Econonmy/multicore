@@ -41,7 +41,15 @@ public final class ParallelTicker {
     private static final long CHECK_INTERVAL_NANOS = 250_000_000L;
     private static final long DEADLOCK_CHECK_AFTER_NANOS = 2_000_000_000L;
 
-    private final Map<ServerLevel, LevelThread> threads = new IdentityHashMap<>();
+    /** Dimension threads; thread i runs the dimensions of group i (see {@link ThreadGroups}). */
+    private final List<LevelThread> pool = new ArrayList<>();
+    private volatile ThreadGroups.Settings groupSettings = ThreadGroups.Settings.DEFAULT;
+    private volatile List<Set<String>> configuredGroups = List.of();
+    private List<List<String>> groups = List.of();
+    private List<String> groupedFor = List.of();
+    private volatile String groupDescription = "";
+    /** Recent tick time per dimension (ms), for grouping. Main thread only. */
+    private final Map<String, Double> costMs = new java.util.HashMap<>();
     private volatile boolean enabled = true;
     @Nullable
     private volatile String disabledReason;
@@ -61,6 +69,18 @@ public final class ParallelTicker {
         this.serialDimensions = Set.copyOf(serialDims);
         this.fallbackOnError = fallback;
         this.slowPhaseNanos = slowPhaseMs * 1_000_000L;
+    }
+
+    /** How dimensions share threads (see {@link ThreadGroups}). */
+    public void configureGroups(ThreadGroups.Settings settings, Collection<? extends String> groupEntries) {
+        this.groupSettings = settings;
+        this.configuredGroups = ThreadGroups.parse(groupEntries);
+        this.groupedFor = List.of(); // regroup on the next tick
+    }
+
+    /** For /multicore status: which dimensions share which thread right now. */
+    public String groupDescription() {
+        return this.groupDescription;
     }
 
     public boolean isActive() {
@@ -99,7 +119,11 @@ public final class ParallelTicker {
     /** Main thread only. Snapshot for /multicore status. */
     public Map<ResourceKey<Level>, Long> lastTickNanos() {
         Map<ResourceKey<Level>, Long> out = new IdentityHashMap<>();
-        this.threads.forEach((level, thread) -> out.put(level.dimension(), thread.lastTickNanos));
+        for (LevelThread thread : this.pool) {
+            ServerLevel[] levels = thread.levels();
+            long[] nanos = thread.levelTickNanos;
+            for (int i = 0; i < levels.length && i < nanos.length; i++) out.put(levels[i].dimension(), nanos[i]);
+        }
         return out;
     }
 
@@ -143,7 +167,6 @@ public final class ParallelTicker {
         for (ServerLevel level : levels) {
             (this.isSerial(level) ? serial : parallel).add(level);
         }
-        this.retireMissing(levels);
 
         profiler.popPush("multicore_parallel");
         if (parallel.size() >= 2) {
@@ -175,15 +198,14 @@ public final class ParallelTicker {
 
     private void runParallel(MinecraftServer server, List<ServerLevel> parallel, List<ServerLevel> serial,
                              BooleanSupplier hasTimeLeft, Thread main, int tickCount) {
-        LevelThread[] workers = new LevelThread[parallel.size()];
-        for (int i = 0; i < workers.length; i++) {
-            workers[i] = this.threadFor(parallel.get(i), main);
-        }
+        LevelThread[] workers = this.workersFor(parallel, main, tickCount);
         Phase phase = new Phase(hasTimeLeft, main, workers);
         long start = System.nanoTime();
 
         for (LevelThread worker : workers) {
-            setOwner(worker.level(), worker);
+            for (ServerLevel level : worker.levels()) {
+                setOwner(level, worker);
+            }
         }
         TickThreads.setParallelPhase(true);
         Throwable mainError = null;
@@ -227,7 +249,9 @@ public final class ParallelTicker {
         } finally {
             TickThreads.setParallelPhase(false);
             for (LevelThread worker : workers) {
-                setOwner(worker.level(), main);
+                for (ServerLevel level : worker.levels()) {
+                    setOwner(level, main);
+                }
             }
         }
         if (mainError != null) {
@@ -242,9 +266,15 @@ public final class ParallelTicker {
         for (LevelThread worker : workers) {
             sum += worker.lastTickNanos;
             work += Math.max(0, worker.lastTickNanos - worker.lastLockWaitNanos);
-            this.recordTickTime(access, worker.level(), tickCount, worker.lastTickNanos);
-            auto.recordRegion(worker.level().dimension().location().toString(), worker.lastTickNanos / 1e6,
-                    worker.level().players().size());
+            ServerLevel[] levels = worker.levels();
+            long[] nanos = worker.levelTickNanos;
+            for (int i = 0; i < levels.length && i < nanos.length; i++) {
+                this.recordTickTime(access, levels[i], tickCount, nanos[i]);
+                String id = levels[i].dimension().location().toString();
+                double ms = nanos[i] / 1e6;
+                auto.recordRegion(id, ms, levels[i].players().size());
+                this.costMs.merge(id, ms, (old, now) -> old * 0.9 + now * 0.1);
+            }
         }
         long wall = System.nanoTime() - start;
         Stats.recordPhase(wall, sum);
@@ -375,38 +405,59 @@ public final class ParallelTicker {
         access.multicore$perWorldTickTimes().computeIfAbsent(level.dimension(), k -> new long[100])[tickCount % 100] = nanos;
     }
 
-    private LevelThread threadFor(ServerLevel level, Thread main) {
-        LevelThread thread = this.threads.get(level);
-        if (thread == null || thread.isRetired() || !thread.isAlive()) {
-            thread = new LevelThread(this, level, main.getContextClassLoader());
-            thread.start();
-            this.threads.put(level, thread);
+    /**
+     * The threads for this tick's parallel dimensions: groups are worked out again when the set of parallel
+     * dimensions changes and every 5 seconds (the load moves), then thread i gets the dimensions of group i.
+     */
+    private LevelThread[] workersFor(List<ServerLevel> parallel, Thread main, int tickCount) {
+        List<String> ids = new ArrayList<>(parallel.size());
+        Map<String, ServerLevel> byId = new java.util.HashMap<>();
+        for (ServerLevel level : parallel) {
+            String id = level.dimension().location().toString();
+            ids.add(id);
+            byId.put(id, level);
         }
-        return thread;
-    }
-
-    private void retireMissing(ServerLevel[] levels) {
-        if (this.threads.isEmpty()) {
-            return;
-        }
-        Set<ServerLevel> live = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
-        live.addAll(List.of(levels));
-        this.threads.entrySet().removeIf(e -> {
-            if (live.contains(e.getKey()) && !this.isSerial(e.getKey())) {
-                return false;
+        if (!ids.equals(this.groupedFor) || tickCount % 100 == 0) {
+            List<List<String>> next = ThreadGroups.assign(ids, this.configuredGroups, this.groupSettings, this.costMs);
+            if (!next.equals(this.groups)) {
+                this.groups = next;
+                this.groupDescription = ThreadGroups.describe(next);
+                MultiCore.LOGGER.debug("[MultiCore] dimension threads: {}", this.groupDescription);
             }
-            e.getValue().retire();
-            return true;
-        });
+            this.groupedFor = ids;
+        }
+        LevelThread[] workers = new LevelThread[this.groups.size()];
+        for (int i = 0; i < workers.length; i++) {
+            List<String> group = this.groups.get(i);
+            ServerLevel[] levels = new ServerLevel[group.size()];
+            for (int j = 0; j < levels.length; j++) levels[j] = byId.get(group.get(j));
+            LevelThread thread = i < this.pool.size() ? this.pool.get(i) : null;
+            if (thread == null || thread.isRetired() || !thread.isAlive()) {
+                thread = new LevelThread(this, levels, i, main.getContextClassLoader());
+                thread.start();
+                if (i < this.pool.size()) this.pool.set(i, thread);
+                else this.pool.add(thread);
+            } else if (!java.util.Arrays.equals(thread.levels(), levels)) {
+                thread.setLevels(levels); // between ticks: the thread is parked
+            }
+            workers[i] = thread;
+        }
+        while (this.pool.size() > workers.length) {
+            this.pool.remove(this.pool.size() - 1).retire();
+        }
+        return workers;
     }
 
     /** Main thread only. */
     public void retireAll() {
-        if (this.threads.isEmpty()) {
+        if (this.pool.isEmpty()) {
             return;
         }
-        this.threads.values().forEach(LevelThread::retire);
-        this.threads.clear();
+        this.pool.forEach(LevelThread::retire);
+        this.pool.clear();
+        this.groups = List.of();
+        this.groupedFor = List.of();
+        this.groupDescription = "";
     }
 
     /** Makes {@code owner} the thread that vanilla's (and Lithium's) "is this the level's thread?" checks accept. */

@@ -41,6 +41,13 @@ Folia makes plugins opt in to being thread-safe. Mods cannot opt in, so MultiCor
 
 ## Auto-adjust under load
 
+**One thread runs 2 to 6 dimensions.** Light dimensions (the Nether, the End, a quiet hub or shop world) share a
+dimension thread and tick one after another on it, up to `maxDimensionsPerThread` (6) per thread or about
+`threadTargetMs` (10 ms) of tick time; a heavy dimension (a busy overworld) gets a thread of its own. The grouping
+follows the measured tick times every 5 seconds. `threadGroups` pins dimensions together (e.g.
+`["minecraft:the_nether, minecraft:the_end, multiworld:hub"]`), `maxThreads` caps the threads (0 = logical cores - 2).
+Dimensions on the same thread can change each other directly (no deferring). `/multicore status` shows the groups.
+
 Each dimension is one region. Every 5 seconds (`[autoAdjust]` in the config):
 
 - **Idle regions join the main thread.** A dimension without players whose tick costs under `idleMs` (0.5 ms) is

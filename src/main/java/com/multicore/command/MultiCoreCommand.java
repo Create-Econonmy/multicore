@@ -112,10 +112,13 @@ public final class MultiCoreCommand {
             String how = ticker.isConfiguredSerial(level) ? "main thread (serialDimensions)" + cost
                     : auto.isIdle(id) ? "main thread (idle)" + cost
                     : nanos == null ? "main thread" + cost
-                    : String.format(Locale.ROOT, "own thread, %.2f ms", nanos / 1e6) + cost;
+                    : String.format(Locale.ROOT, "dimension thread, %.2f ms", nanos / 1e6) + cost;
             line(src, "  " + id + ": ", how + ", " + level.players().size() + " players", ChatFormatting.WHITE);
         }
 
+        if (!ticker.groupDescription().isEmpty()) {
+            line(src, "Dimension threads: ", ticker.groupDescription(), ChatFormatting.WHITE);
+        }
         line(src, "Mod lock: ", String.format(Locale.ROOT, "%d acquisitions, %.1f ms total waiting",
                 Stats.MOD_LOCK_ACQUIRES.sum(), Stats.MOD_LOCK_WAIT_NANOS.sum() / 1e6), ChatFormatting.GRAY);
         line(src, "Cross-dimension: ", String.format(Locale.ROOT, "%d reads, %d chunk loads, %d deferred actions",
