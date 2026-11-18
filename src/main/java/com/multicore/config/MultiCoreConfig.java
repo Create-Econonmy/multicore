@@ -51,7 +51,7 @@ public final class MultiCoreConfig {
                         "Adjust the regions (one per dimension) to the load every 5 seconds:",
                         "- a dimension with no players whose tick costs less than idleMs ticks on the main thread instead of its own,",
                         "  and gets its own thread back when a player enters or its tick costs more than busyMs;",
-                        "- when the server is busy (parallel tick over loadMs) but parallel ticking is less than minSpeedup times",
+                        "- when the server is busy (parallel tick over loadMs; 50 ms = TPS under 20) but parallel ticking is less than minSpeedup times",
                         "  faster than one thread for 30 seconds, tick like vanilla for retryMinutes, then measure again",
                         "  (the wait doubles each time it still does not help, up to an hour).",
                         "/multicore status shows what it decided and why.")
@@ -61,7 +61,7 @@ public final class MultiCoreConfig {
         AUTO_BUSY_MS = b.comment("An idle dimension whose tick costs more than this (ms) gets its own thread back.")
                 .defineInRange("busyMs", 2.0, 0.0, 50.0);
         AUTO_LOAD_MS = b.comment("Only judge the speedup when the parallel tick takes at least this long (ms).")
-                .defineInRange("loadMs", 10.0, 0.0, 1000.0);
+                .defineInRange("loadMs", 50.0, 0.0, 1000.0);
         AUTO_MIN_SPEEDUP = b.comment("Under load, parallel ticking must be at least this many times faster than one thread.",
                         "1.0 never falls back.")
                 .defineInRange("minSpeedup", 1.05, 1.0, 16.0);

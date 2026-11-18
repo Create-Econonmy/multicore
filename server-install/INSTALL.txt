@@ -44,7 +44,7 @@ AUTO-ADJUST (on by default, config [autoAdjust] in multicore-common.toml)
   - A world with no players that costs under 0.5 ms (an empty Shop at night,
     the End) ticks on the main thread instead of waking its own thread. It gets
     its own thread back the moment a player enters or it costs over 2 ms.
-  - If the server is busy (over 10 ms per tick) but running the worlds in
+  - If the server is lagging (over 50 ms per tick, TPS under 20) but running the worlds in
     parallel is not at least 1.05x faster than one thread for 30 seconds
     (everything stuck behind the shared mod lock), MultiCore ticks like vanilla
     for 10 minutes and then tries again. Each failed try doubles the wait, up

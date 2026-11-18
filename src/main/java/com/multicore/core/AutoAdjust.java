@@ -20,8 +20,8 @@ import java.util.Map;
 public final class AutoAdjust {
     public record Settings(boolean enabled, double idleMs, double busyMs, double loadMs, double minSpeedup,
                            int windowTicks, int badWindows, long retryTicks, long maxRetryTicks) {
-        public static final Settings DEFAULT = new Settings(true, 0.5, 2.0, 10.0, 1.05, 100, 6, 20L * 60 * 10, 20L * 60 * 60);
-        public static final Settings OFF = new Settings(false, 0.5, 2.0, 10.0, 1.05, 100, 6, 20L * 60 * 10, 20L * 60 * 60);
+        public static final Settings DEFAULT = new Settings(true, 0.5, 2.0, 50.0, 1.05, 100, 6, 20L * 60 * 10, 20L * 60 * 60);
+        public static final Settings OFF = new Settings(false, 0.5, 2.0, 50.0, 1.05, 100, 6, 20L * 60 * 10, 20L * 60 * 60);
     }
 
     static final class Region {

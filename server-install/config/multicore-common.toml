@@ -36,7 +36,7 @@
 	#Adjust the regions (one per dimension) to the load every 5 seconds:
 	#- a dimension with no players whose tick costs less than idleMs ticks on the main thread instead of its own,
 	#  and gets its own thread back when a player enters or its tick costs more than busyMs;
-	#- when the server is busy (parallel tick over loadMs) but parallel ticking is less than minSpeedup times
+	#- when the server is busy (parallel tick over loadMs; 50 ms = TPS under 20) but parallel ticking is less than minSpeedup times
 	#  faster than one thread for 30 seconds, tick like vanilla for retryMinutes, then measure again
 	#  (the wait doubles each time it still does not help, up to an hour).
 	#/multicore status shows what it decided and why.
@@ -52,7 +52,7 @@
 	#Only judge the speedup when the parallel tick takes at least this long (ms).
 	# Default: 10.0
 	# Range: 0.0 ~ 1000.0
-	loadMs = 10.0
+	loadMs = 50.0
 	#Under load, parallel ticking must be at least this many times faster than one thread.
 	#1.0 never falls back.
 	# Default: 1.05

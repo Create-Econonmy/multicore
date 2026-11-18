@@ -46,7 +46,7 @@ Each dimension is one region. Every 5 seconds (`[autoAdjust]` in the config):
 - **Idle regions join the main thread.** A dimension without players whose tick costs under `idleMs` (0.5 ms) is
   ticked on the main thread after the parallel phase instead of waking its own thread. It gets its own thread back as
   soon as a player enters or it costs over `busyMs` (2 ms).
-- **No gain, no threads.** When the parallel tick takes over `loadMs` (10 ms) but is less than `minSpeedup` (1.05x)
+- **No gain, no threads.** When the parallel tick takes over `loadMs` (50 ms, i.e. TPS under 20) but is less than `minSpeedup` (1.05x)
   faster than the same work on one thread (the sum of the dimensions' tick times minus their mod-lock waits) for 30
   seconds, MultiCore ticks like vanilla for `retryMinutes` (10) and measures again. The wait doubles after each failed
   retry, up to an hour, and resets after a good window.
