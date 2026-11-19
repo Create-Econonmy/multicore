@@ -80,6 +80,6 @@ public final class MultiCore {
         com.multicore.core.AutoAdjust.get().configure(new com.multicore.core.AutoAdjust.Settings(
                 MultiCoreConfig.AUTO_ADJUST.get() && !gameTestServer,
                 MultiCoreConfig.AUTO_IDLE_MS.get(), MultiCoreConfig.AUTO_BUSY_MS.get(), MultiCoreConfig.AUTO_LOAD_MS.get(),
-                MultiCoreConfig.AUTO_MIN_SPEEDUP.get(), 100, 6, retry, Math.max(retry, 20L * 60 * 60)));
+                MultiCoreConfig.AUTO_MIN_SPEEDUP.get(), 100, MultiCoreConfig.AUTO_LOAD_SECONDS.get() * 20, retry, Math.max(retry, 20L * 60 * 60)));
     }
 }

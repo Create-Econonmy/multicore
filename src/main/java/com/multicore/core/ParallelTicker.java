@@ -109,8 +109,8 @@ public final class ParallelTicker {
         return this.serialDimensions.contains(level.dimension().location().toString());
     }
 
-    private void autoEndTick(long tick) {
-        String msg = AutoAdjust.get().endTick(tick);
+    private void autoEndTick(MinecraftServer server, long tick) {
+        String msg = AutoAdjust.get().endTick(tick, server.getAverageTickTimeNanos() / 1e6);
         if (msg != null) {
             MultiCore.LOGGER.info("[MultiCore] auto-adjust: {}", msg);
         }
@@ -146,7 +146,7 @@ public final class ParallelTicker {
         if (AutoAdjust.get().singleThreadNow(server.getTickCount())) {
             // Parallel ticking did not pay off under load (see AutoAdjust); tick like vanilla until the retry.
             this.retireAll();
-            this.autoEndTick(server.getTickCount());
+            this.autoEndTick(server, server.getTickCount());
             return false;
         }
 
@@ -191,7 +191,7 @@ public final class ParallelTicker {
         }
         SerialQueue.runAll();
         Stats.lastSerialNanos = System.nanoTime() - serialStart;
-        this.autoEndTick(tickCount);
+        this.autoEndTick(server, tickCount);
         profiler.pop();
         return true;
     }

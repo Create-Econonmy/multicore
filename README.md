@@ -48,15 +48,17 @@ follows the measured tick times every 5 seconds. `threadGroups` pins dimensions 
 `["minecraft:the_nether, minecraft:the_end, multiworld:hub"]`), `maxThreads` caps the threads (0 = logical cores - 2).
 Dimensions on the same thread can change each other directly (no deferring). `/multicore status` shows the groups.
 
-Each dimension is one region. Every 5 seconds (`[autoAdjust]` in the config):
+Each dimension is one region (`[autoAdjust]` in the config). Nothing changes while the server keeps up: auto-adjust
+only acts once the server's real tick time (vanilla's 100-tick average) has stayed over `loadMs` (50 ms, i.e. TPS under
+20) for `loadSeconds` (30) in a row. One good 5-second check restarts the count. Then, every 5 seconds:
 
 - **Idle regions join the main thread.** A dimension without players whose tick costs under `idleMs` (0.5 ms) is
   ticked on the main thread after the parallel phase instead of waking its own thread. It gets its own thread back as
-  soon as a player enters or it costs over `busyMs` (2 ms).
-- **No gain, no threads.** When the parallel tick takes over `loadMs` (50 ms, i.e. TPS under 20) but is less than `minSpeedup` (1.05x)
-  faster than the same work on one thread (the sum of the dimensions' tick times minus their mod-lock waits) for 30
-  seconds, MultiCore ticks like vanilla for `retryMinutes` (10) and measures again. The wait doubles after each failed
-  retry, up to an hour, and resets after a good window.
+  soon as a player enters or it costs over `busyMs` (2 ms), at any TPS.
+- **No gain, no threads.** If, over that low-TPS stretch, the parallel tick was less than `minSpeedup` (1.05x) faster
+  than the same work on one thread (the sum of the dimensions' tick times minus their mod-lock waits), MultiCore ticks
+  like vanilla for `retryMinutes` (10), then tries threads again (and again waits for 30 s under 20 TPS before judging).
+  The wait doubles after each failed retry, up to an hour, and resets after a good stretch.
 
 `/multicore status` shows each dimension's thread, average cost and players, and the last decision.
 `/multicore auto on|off` switches it until the next restart. The GameTest server keeps it off except in its own tests.

@@ -26,6 +26,7 @@ public final class MultiCoreConfig {
     public static final ModConfigSpec.DoubleValue AUTO_IDLE_MS;
     public static final ModConfigSpec.DoubleValue AUTO_BUSY_MS;
     public static final ModConfigSpec.DoubleValue AUTO_LOAD_MS;
+    public static final ModConfigSpec.IntValue AUTO_LOAD_SECONDS;
     public static final ModConfigSpec.DoubleValue AUTO_MIN_SPEEDUP;
     public static final ModConfigSpec.IntValue AUTO_RETRY_MINUTES;
 
@@ -66,20 +67,24 @@ public final class MultiCoreConfig {
 
         b.push("autoAdjust");
         AUTO_ADJUST = b.comment(
-                        "Adjust the regions (one per dimension) to the load every 5 seconds:",
-                        "- a dimension with no players whose tick costs less than idleMs ticks on the main thread instead of its own,",
-                        "  and gets its own thread back when a player enters or its tick costs more than busyMs;",
-                        "- when the server is busy (parallel tick over loadMs; 50 ms = TPS under 20) but parallel ticking is less than minSpeedup times",
-                        "  faster than one thread for 30 seconds, tick like vanilla for retryMinutes, then measure again",
-                        "  (the wait doubles each time it still does not help, up to an hour).",
+                        "Adjust the regions (one per dimension) to the load. Nothing changes while the server keeps up:",
+                        "only once TPS has stayed under 20 (server tick over loadMs) for loadSeconds in a row it checks every 5 seconds:",
+                        "- a dimension with no players whose tick costs less than idleMs ticks on the main thread instead of its own;",
+                        "- if parallel ticking was less than minSpeedup times faster than one thread over that time, tick like vanilla",
+                        "  for retryMinutes, then measure again (the wait doubles each time it still does not help, up to an hour).",
+                        "An idle dimension always gets its own thread back when a player enters or its tick costs more than busyMs.",
                         "/multicore status shows what it decided and why.")
                 .define("enabled", true);
         AUTO_IDLE_MS = b.comment("A dimension without players whose tick costs less than this (ms) is idle.")
                 .defineInRange("idleMs", 0.5, 0.0, 50.0);
         AUTO_BUSY_MS = b.comment("An idle dimension whose tick costs more than this (ms) gets its own thread back.")
                 .defineInRange("busyMs", 2.0, 0.0, 50.0);
-        AUTO_LOAD_MS = b.comment("Only judge the speedup when the parallel tick takes at least this long (ms).")
+        AUTO_LOAD_MS = b.comment("The server counts as overloaded when its average tick takes longer than this (ms).",
+                        "50 ms = TPS under 20.")
                 .defineInRange("loadMs", 50.0, 0.0, 1000.0);
+        AUTO_LOAD_SECONDS = b.comment("Auto-adjust only acts after the server has been overloaded this long in a row (seconds,",
+                        "checked every 5 seconds).")
+                .defineInRange("loadSeconds", 30, 5, 3600);
         AUTO_MIN_SPEEDUP = b.comment("Under load, parallel ticking must be at least this many times faster than one thread.",
                         "1.0 never falls back.")
                 .defineInRange("minSpeedup", 1.05, 1.0, 16.0);

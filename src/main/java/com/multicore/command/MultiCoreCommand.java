@@ -62,7 +62,7 @@ public final class MultiCoreCommand {
     private static int auto(CommandContext<CommandSourceStack> ctx, boolean on) {
         AutoAdjust.Settings s = AutoAdjust.get().settings();
         AutoAdjust.get().configure(new AutoAdjust.Settings(on, s.idleMs(), s.busyMs(), s.loadMs(), s.minSpeedup(),
-                s.windowTicks(), s.badWindows(), s.retryTicks(), s.maxRetryTicks()));
+                s.windowTicks(), s.loadTicks(), s.retryTicks(), s.maxRetryTicks()));
         if (!on) {
             AutoAdjust.get().reset();
         }
@@ -101,6 +101,11 @@ public final class MultiCoreCommand {
                     ? String.format(Locale.ROOT, "one thread for %d:%02d more (parallel did not help under load)", left / 1200, left / 20 % 60)
                     : Double.isNaN(auto.lastSpeedup()) ? "watching" : String.format(Locale.ROOT, "watching, last speedup %.2fx", auto.lastSpeedup());
             line(src, "Auto-adjust: ", state, left > 0 ? ChatFormatting.YELLOW : ChatFormatting.GREEN);
+            long low = auto.lowTpsTicks();
+            line(src, "  server tick: ", String.format(Locale.ROOT, "%.1f ms (%s)", auto.serverTickMs(),
+                    low > 0 ? String.format(Locale.ROOT, "TPS under 20 for %d of %d s before it acts", low / 20,
+                            auto.settings().loadTicks() / 20) : "TPS fine, nothing changes"),
+                    low > 0 ? ChatFormatting.YELLOW : ChatFormatting.GRAY);
             line(src, "  last change: ", auto.lastAction(), ChatFormatting.GRAY);
         }
         Map<ResourceKey<Level>, Long> times = ticker.lastTickNanos();
