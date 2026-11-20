@@ -48,6 +48,16 @@ class ThreadGroupsTest {
     }
 
     @Test
+    void configuredGroupsGetAThreadToThemselves() {
+        // The live server's layout: South, North and the Lab alone, the light worlds together, the rest packed apart.
+        var dims = List.of(OW, NORTH, WAR, END, SHOP, NETHER, CREATIVE, HUB);
+        Map<String, Double> cost = Map.of(OW, 1.5, NORTH, 0.2, WAR, 0.1, END, 0.1, SHOP, 0.1, NETHER, 0.1, CREATIVE, 12.0, HUB, 0.1);
+        var groups = ThreadGroups.parse(List.of(OW, NORTH, CREATIVE, WAR + ", " + END + ", " + SHOP + ", " + NETHER));
+        var g = ThreadGroups.assign(dims, groups, S, cost);
+        assertEquals(List.of(List.of(OW), List.of(NORTH), List.of(WAR, END, SHOP, NETHER), List.of(CREATIVE), List.of(HUB)), g);
+    }
+
+    @Test
     void theThreadLimitIsKept() {
         var dims = List.of(OW, NETHER, END, HUB, SHOP);
         Map<String, Double> heavy = dims.stream().collect(Collectors.toMap(d -> d, d -> 25.0));

@@ -58,7 +58,8 @@ public final class MultiCoreConfig {
                         "Dimensions are added to a thread until it has about this much tick time (milliseconds, measured).")
                 .defineInRange("threadTargetMs", 10.0, 0.1, 1000.0);
         THREAD_GROUPS = b.comment(
-                        "Dimensions that always share one thread, one entry per thread.",
+                        "Dimensions that always share one thread, one entry per thread. Each entry gets that thread to itself (other",
+                        "dimensions are packed onto other threads), so a single dimension can be given its own thread.",
                         "Example: [\"minecraft:the_nether, minecraft:the_end, multiworld:hub\"]")
                 .defineListAllowEmpty("threadGroups", List.of(), () -> "", o -> o instanceof String);
         FALLBACK_TO_SERIAL_ON_ERROR = b.comment(

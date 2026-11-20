@@ -45,12 +45,15 @@ public final class ThreadGroups {
         for (int i = 0; i < dims.size(); i++) order.put(dims.get(i), i);
         // 1. Units: configured groups (only their dimensions that are parallel now), then every other dimension alone.
         List<Set<String>> units = new ArrayList<>();
+        // Configured groups get a thread to themselves: nothing else is packed onto it while the thread limit allows.
+        Set<Set<String>> dedicated = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         Set<String> placed = new LinkedHashSet<>();
         for (Collection<String> g : configured) {
             Set<String> unit = new LinkedHashSet<>();
             for (String d : g) if (order.containsKey(d) && !placed.contains(d)) unit.add(d);
             if (!unit.isEmpty()) {
                 units.add(unit);
+                dedicated.add(unit);
                 placed.addAll(unit);
             }
         }
@@ -69,19 +72,22 @@ public final class ThreadGroups {
         int limit = Math.max(1, s.threadLimit());
         List<Set<String>> threads = new ArrayList<>();
         List<Double> load = new ArrayList<>();
+        List<Boolean> closed = new ArrayList<>(); // runs a configured group: nothing else joins it
         for (Set<String> u : units) {
             double c = cost(u, costMs);
+            boolean own = dedicated.contains(u);
             int best = -1;
-            for (int i = 0; i < threads.size(); i++) {
-                boolean fits = threads.get(i).size() + u.size() <= perThread && load.get(i) + c <= s.threadTargetMs();
+            for (int i = 0; i < threads.size() && !own; i++) {
+                boolean fits = !closed.get(i) && threads.get(i).size() + u.size() <= perThread && load.get(i) + c <= s.threadTargetMs();
                 if (fits && (best < 0 || load.get(i) > load.get(best))) best = i;
             }
             if (best < 0 && threads.size() < limit) {
                 threads.add(new LinkedHashSet<>());
                 load.add(0.0);
+                closed.add(own);
                 best = threads.size() - 1;
             }
-            if (best < 0) {
+            if (best < 0) { // at the thread limit: the least loaded thread, configured or not
                 for (int i = 0; i < threads.size(); i++) {
                     boolean room = threads.get(i).size() + u.size() <= perThread;
                     if (best < 0 || (room && (threads.get(best).size() + u.size() > perThread || load.get(i) < load.get(best)))) best = i;
