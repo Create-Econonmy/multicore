@@ -29,6 +29,11 @@ public final class MultiCoreConfig {
     public static final ModConfigSpec.IntValue AUTO_LOAD_SECONDS;
     public static final ModConfigSpec.DoubleValue AUTO_MIN_SPEEDUP;
     public static final ModConfigSpec.IntValue AUTO_RETRY_MINUTES;
+    public static final ModConfigSpec.BooleanValue MAP_ENABLED;
+    public static final ModConfigSpec.ConfigValue<String> MAP_BIND;
+    public static final ModConfigSpec.IntValue MAP_PORT;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> MAP_ALLOWED;
+    public static final ModConfigSpec.BooleanValue MAP_TERRAIN;
 
     static {
         ModConfigSpec.Builder b = new ModConfigSpec.Builder();
@@ -122,6 +127,26 @@ public final class MultiCoreConfig {
         LOG_CROSS_DIMENSION_ACCESS = b.comment(
                         "Log the first time each mod reaches into another dimension from a dimension thread (with a stack trace).")
                 .define("logCrossDimensionAccess", true);
+        b.pop();
+
+        b.push("map");
+        MAP_ENABLED = b.comment(
+                        "A flat (2D) web map of every world: which dimension thread runs it, which chunks are loaded and ticking,",
+                        "forced chunks, players and the world border. Only answers addresses in allowedNetworks.")
+                .define("enabled", true);
+        MAP_BIND = b.comment("Address the map listens on (0.0.0.0 = every network card of the server). Needs a restart.")
+                .define("bind", "0.0.0.0");
+        MAP_PORT = b.comment("Port of the map: open http://<server address>:<port>/ in a browser. Needs a restart.")
+                .defineInRange("port", 18200, 1, 65535);
+        MAP_ALLOWED = b.comment(
+                        "Who may open the map, as address/prefix-length. Everyone else is disconnected without an answer.",
+                        "The default is loopback and the private (home/office network) ranges, so it never works from the internet.")
+                .defineListAllowEmpty("allowedNetworks", List.of("127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12",
+                        "192.168.0.0/16", "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10"), () -> "", o -> o instanceof String);
+        MAP_TERRAIN = b.comment(
+                        "Draw the ground under the chunks (top block colours, like a vanilla map). Read from loaded chunks only,",
+                        "a few each tick on the main thread (about 1 ms at most), and kept in multicore-map/ between restarts.")
+                .define("terrain", true);
         b.pop();
 
         SPEC = b.build();

@@ -78,6 +78,11 @@ public final class ParallelTicker {
         this.groupedFor = List.of(); // regroup on the next tick
     }
 
+    /** Main thread only. The dimensions of each dimension thread (thread i runs group i), for the thread map. */
+    public List<List<String>> currentGroups() {
+        return this.groups;
+    }
+
     /** For /multicore status: which dimensions share which thread right now. */
     public String groupDescription() {
         return this.groupDescription;

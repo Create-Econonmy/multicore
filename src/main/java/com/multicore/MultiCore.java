@@ -41,14 +41,19 @@ public final class MultiCore {
             ListenerSerializer.wrapAll(NeoForge.EVENT_BUS);
             // Logs whether dimthread or MultiCore ticks the dimensions (dimthread's hook may run before MultiCore's).
             DimThreadCompat.isTicking(e.getServer());
+            com.multicore.map.ThreadMap.onServerStarted(e.getServer());
         });
-        NeoForge.EVENT_BUS.addListener(ServerStoppingEvent.class, e -> ShutdownWatchdog.onStopping(e.getServer()));
+        NeoForge.EVENT_BUS.addListener(ServerStoppingEvent.class, e -> {
+            com.multicore.map.ThreadMap.onServerStopping(e.getServer());
+            ShutdownWatchdog.onStopping(e.getServer());
+        });
         NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, e -> {
             ShutdownWatchdog.onStopped();
             ParallelTicker.get().retireAll();
         });
         // Mods can register listeners at any time (on reload, when a feature switches on); pick those up every 30 s.
         NeoForge.EVENT_BUS.addListener(ServerTickEvent.Post.class, e -> {
+            com.multicore.map.ThreadMap.onTick(e.getServer());
             if (e.getServer().getTickCount() % 600 == 0) {
                 ListenerSerializer.wrapAll(NeoForge.EVENT_BUS);
                 if (DimThreadCompat.isTicking(e.getServer())) {

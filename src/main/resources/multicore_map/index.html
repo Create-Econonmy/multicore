@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MultiCore Thread Map</title>
+<style>
+:root {
+  --bg: #111417; --panel: #181c20; --panel2: #1f2429; --line: #2c333a; --text: #e4e8ec; --dim: #8d98a3;
+  --accent: #e8b04a; --good: #6fd08c; --warn: #f0b54a; --bad: #f06a5a; --map: #0b0d0f;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+#app { display: grid; grid-template-columns: 320px 1fr; height: 100vh; }
+aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 14px 14px 24px; }
+h1 { font-size: 15px; margin: 0 0 2px; letter-spacing: .02em; }
+h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); margin: 18px 0 8px; font-weight: 600; }
+.sub { color: var(--dim); font-size: 12px; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
+.stat { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+.stat b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--dim); font-size: 11px; }
+.thread { border: 1px solid var(--line); border-left: 4px solid var(--c); background: var(--panel2); border-radius: 6px; padding: 7px 9px; margin-bottom: 6px; }
+.thread .top { display: flex; justify-content: space-between; font-weight: 600; }
+.thread .top em { font-style: normal; color: var(--dim); font-weight: 400; font-variant-numeric: tabular-nums; }
+.thread .dims { color: var(--dim); font-size: 12px; margin-top: 2px; }
+.world { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left;
+  background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 6px; padding: 6px 8px; cursor: pointer; font: inherit; }
+.world:hover { background: var(--panel2); }
+.world.sel { background: var(--panel2); border-color: var(--line); }
+.world .dot { width: 10px; height: 10px; border-radius: 2px; background: var(--c); }
+.world small { display: block; color: var(--dim); font-size: 11px; }
+.world .n { color: var(--dim); font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
+.legend div { display: flex; align-items: center; gap: 8px; margin: 4px 0; color: var(--dim); }
+.legend i { width: 14px; height: 14px; border-radius: 2px; display: inline-block; flex: none; }
+.player { display: flex; justify-content: space-between; padding: 3px 6px; border-radius: 4px; cursor: pointer; }
+.player:hover { background: var(--panel2); }
+.player span { color: var(--dim); font-variant-numeric: tabular-nums; }
+main { position: relative; overflow: hidden; background: var(--map); }
+canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+canvas.drag { cursor: grabbing; }
+.toolbar { position: absolute; top: 12px; left: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+.toolbar button, .seg button { background: rgba(24,28,32,.92); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 10px; font: inherit; cursor: pointer; }
+.toolbar button:hover { border-color: var(--dim); }
+.toolbar button.on { border-color: var(--accent); color: var(--accent); }
+.seg { display: inline-flex; }
+.seg button { border-radius: 0; }
+.seg button:first-child { border-radius: 6px 0 0 6px; }
+.seg button:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
+#hover { position: absolute; bottom: 12px; left: 12px; background: rgba(24,28,32,.94); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 10px; font-variant-numeric: tabular-nums; pointer-events: none; min-width: 210px; }
+#hover .k { color: var(--dim); }
+#status { position: absolute; top: 12px; right: 12px; background: rgba(24,28,32,.92); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; font-size: 12px; color: var(--dim); }
+#status.err { color: var(--bad); border-color: var(--bad); }
+.mode-parallel { color: var(--good); } .mode-vanilla, .mode-dimthread { color: var(--warn); }
+@media (max-width: 760px) {
+  #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; min-height: 100vh; }
+  aside { border-right: 0; border-bottom: 1px solid var(--line); max-height: 46vh; padding: 12px 16px; }
+  main { height: 70vh; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <h1>MultiCore Thread Map</h1>
+    <div class="sub" id="mode">connecting…</div>
+    <div class="stats">
+      <div class="stat"><b id="tps">–</b><span>TPS</span></div>
+      <div class="stat"><b id="tick">–</b><span>server tick (ms)</span></div>
+      <div class="stat"><b id="par">–</b><span>parallel part (ms)</span></div>
+      <div class="stat"><b id="speed">–</b><span>vs one thread</span></div>
+    </div>
+    <h2>Dimension threads</h2>
+    <div id="threads"></div>
+    <h2>Worlds</h2>
+    <div id="worlds"></div>
+    <h2>Players here</h2>
+    <div id="players" class="sub"></div>
+    <h2>Legend</h2>
+    <div class="legend" id="legend"></div>
+    <div class="sub" style="margin-top:14px" id="auto"></div>
+  </aside>
+  <main>
+    <canvas id="map"></canvas>
+    <div class="toolbar">
+      <span class="seg"><button id="byThread" class="on">By thread</button><button id="byLoad">By load level</button></span>
+      <button id="tTerrain" class="on">Terrain</button>
+      <button id="tGrid">Chunk grid</button>
+      <button id="fit">Fit loaded</button>
+      <button id="zin">+</button><button id="zout">−</button>
+    </div>
+    <div id="status">–</div>
+    <div id="hover" hidden></div>
+  </main>
+</div>
+<script>
+"use strict";
+const PALETTE = ["#4cc9f0", "#f7578c", "#7bd88f", "#ffb000", "#b388ff", "#ff7a45", "#2ed3b7", "#d6d84a", "#6c8cff", "#ff9ad5"];
+const MAIN_COLOR = "#9aa4ad";
+const LOAD = { 2: ["#6fd08c", "Entity ticking (full simulation)"], 1: ["#f0b54a", "Block ticking (redstone/crops, no mobs)"], 0: ["#7d8790", "Border (loaded, not ticking)"] };
+const NAMES = { "minecraft:overworld": "South", "multiworld:north": "North", "multiworld:war": "War", "multiworld:shop": "Shop (hub)",
+  "multiworld:creative": "Lab", "minecraft:the_nether": "Nether", "minecraft:the_end": "End", "multiworld:north_nether": "North Nether" };
+const nameOf = id => NAMES[id] || id.split(":").pop().replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+const store = { get(k, d) { try { const v = localStorage.getItem("mcmap." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem("mcmap." + k, JSON.stringify(v)); } catch (e) {} } };
+
+let state = null, world = store.get("world", "minecraft:overworld");
+let view = { x: 0, z: 0, s: 0.5 }, fitted = {};
+let opts = { mode: store.get("mode", "thread"), terrain: store.get("terrain", true), grid: store.get("grid", false) };
+let chunkIndex = new Map();
+const tiles = new Map();
+const cv = document.getElementById("map"), ctx = cv.getContext("2d");
+const $ = id => document.getElementById(id);
+
+function colorOf(w) { return w && w.thread >= 0 ? PALETTE[w.thread % PALETTE.length] : MAIN_COLOR; }
+function cur() { return state && (state.worlds.find(w => w.id === world) || state.worlds[0]); }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+async function poll() {
+  try {
+    const r = await fetch("api/state", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    state = await r.json();
+    $("status").textContent = "live · " + new Date(state.time).toLocaleTimeString();
+    $("status").className = "";
+    render();
+  } catch (e) {
+    $("status").textContent = "no connection to the server (" + e.message + ")";
+    $("status").className = "err";
+  }
+  setTimeout(poll, 2000);
+}
+
+function render() {
+  const w = cur();
+  if (!w) return;
+  world = w.id;
+  const m = state.mode;
+  $("mode").innerHTML = '<span class="mode-' + m + '">' + (m === "parallel" ? "Parallel: worlds tick on their own threads" :
+    m === "dimthread" ? "dimthread is ticking the worlds" : "Vanilla: one thread" + (state.disabledReason ? " – " + esc(state.disabledReason) : "")) +
+    "</span> · " + state.cores + " cores";
+  $("tps").textContent = state.tps.toFixed(1);
+  $("tick").textContent = state.tickMs.toFixed(1);
+  $("par").textContent = state.parallelMs ? state.parallelMs.toFixed(1) : "–";
+  $("speed").textContent = state.parallelMs > 0 ? (state.oneThreadMs / state.parallelMs).toFixed(2) + "×" : "–";
+  $("auto").textContent = "Auto-adjust: " + state.autoAdjust;
+
+  const th = $("threads");
+  th.innerHTML = state.threads.length ? "" : '<div class="sub">No dimension threads right now – every world ticks on the main thread.</div>';
+  for (const t of state.threads) {
+    const el = document.createElement("div");
+    el.className = "thread";
+    el.style.setProperty("--c", PALETTE[t.index % PALETTE.length]);
+    el.innerHTML = '<div class="top">Thread ' + (t.index + 1) + "<em>" + t.avgMs.toFixed(2) + " ms/tick</em></div>" +
+      '<div class="dims">' + t.dims.map(d => esc(nameOf(d))).join(" + ") + "</div>";
+    th.appendChild(el);
+  }
+  const onMain = state.worlds.filter(x => x.thread < 0);
+  if (onMain.length && state.threads.length) {
+    const el = document.createElement("div");
+    el.className = "thread";
+    el.style.setProperty("--c", MAIN_COLOR);
+    el.innerHTML = '<div class="top">Main thread</div><div class="dims">' + onMain.map(d => esc(nameOf(d.id))).join(" + ") + "</div>";
+    th.appendChild(el);
+  }
+
+  const wl = $("worlds");
+  wl.innerHTML = "";
+  for (const x of state.worlds) {
+    const b = document.createElement("button");
+    b.className = "world" + (x.id === world ? " sel" : "");
+    b.style.setProperty("--c", colorOf(x));
+    const loaded = x.counts.entity + x.counts.block + x.counts.border;
+    b.innerHTML = '<span class="dot"></span><span>' + esc(nameOf(x.id)) + "<small>" + esc(x.where) +
+      (x.avgMs != null ? " · " + x.avgMs.toFixed(2) + " ms" : "") + "</small></span>" +
+      '<span class="n">' + loaded + " ch<br>" + x.players.length + " pl</span>";
+    b.onclick = () => { world = x.id; store.set("world", world); render(); };
+    wl.appendChild(b);
+  }
+
+  const pl = $("players");
+  pl.innerHTML = w.players.length ? "" : "Nobody in " + esc(nameOf(w.id)) + ".";
+  for (const p of w.players) {
+    const d = document.createElement("div");
+    d.className = "player";
+    d.innerHTML = "<b>" + esc(p.name) + "</b><span>" + p.x + ", " + p.y + ", " + p.z + "</span>";
+    d.onclick = () => { view.x = p.x; view.z = p.z; view.s = Math.max(view.s, 1); draw(); };
+    pl.appendChild(d);
+  }
+
+  const lg = $("legend");
+  if (opts.mode === "thread") {
+    lg.innerHTML = '<div><i style="background:' + colorOf(w) + '"></i>Entity ticking (' + w.counts.entity + ")</div>" +
+      '<div><i style="background:' + colorOf(w) + ';opacity:.5"></i>Block ticking (' + w.counts.block + ")</div>" +
+      '<div><i style="background:' + colorOf(w) + ';opacity:.2"></i>Border, loaded only (' + w.counts.border + ")</div>";
+  } else {
+    lg.innerHTML = [2, 1, 0].map(k => '<div><i style="background:' + LOAD[k][0] + '"></i>' + LOAD[k][1] + " (" +
+      w.counts[k === 2 ? "entity" : k === 1 ? "block" : "border"] + ")</div>").join("");
+  }
+  lg.innerHTML += '<div><i style="border:2px solid #fff"></i>Force-loaded chunk (' + w.counts.forced + ")</div>" +
+    '<div><i style="border:2px dashed #f06a5a"></i>World border</div><div><i style="background:#fff;border-radius:50%"></i>Player</div>';
+
+  chunkIndex = new Map();
+  const c = w.chunks;
+  for (let i = 0; i < c.length; i += 3) chunkIndex.set(c[i] + "," + c[i + 1], c[i + 2]);
+  if (!fitted[w.id]) { fitted[w.id] = true; fit(); }
+  draw();
+}
+
+function fit() {
+  const w = cur();
+  if (!w) return;
+  const c = w.chunks;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (let i = 0; i < c.length; i += 3) { x0 = Math.min(x0, c[i]); x1 = Math.max(x1, c[i]); z0 = Math.min(z0, c[i + 1]); z1 = Math.max(z1, c[i + 1]); }
+  if (!isFinite(x0)) {
+    const b = w.border, half = Math.min(b.size / 2, 2000);
+    x0 = (b.x - half) / 16; x1 = (b.x + half) / 16; z0 = (b.z - half) / 16; z1 = (b.z + half) / 16;
+  }
+  const r = cv.getBoundingClientRect();
+  if (r.width < 20 || r.height < 20) { fitted[w.id] = false; return; } // not laid out yet: fit on the next update
+  view.x = (x0 + x1 + 1) * 8; view.z = (z0 + z1 + 1) * 8;
+  view.s = clampS(Math.min(r.width / ((x1 - x0 + 3) * 16), r.height / ((z1 - z0 + 3) * 16)));
+  draw();
+}
+const clampS = s => Math.max(1 / 16, Math.min(16, s));
+
+function tile(dim, rx, rz, v) {
+  const key = dim + "|" + rx + "|" + rz;
+  let t = tiles.get(key);
+  if (!t || t.v !== v) {
+    const img = new Image();
+    const nt = { v, img, ok: false, prev: t && t.ok ? t : null };
+    img.onload = () => { nt.ok = true; nt.prev = null; draw(); };
+    img.src = "api/tile?dim=" + encodeURIComponent(dim) + "&x=" + rx + "&z=" + rz + "&v=" + v;
+    tiles.set(key, nt);
+    t = nt;
+  }
+  return t.ok ? t.img : t.prev ? t.prev.img : null;
+}
+
+function draw() {
+  const dpr = window.devicePixelRatio || 1;
+  const r = cv.getBoundingClientRect();
+  if (cv.width !== Math.round(r.width * dpr) || cv.height !== Math.round(r.height * dpr)) {
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = "#0b0d0f";
+  ctx.fillRect(0, 0, r.width, r.height);
+  const w = cur();
+  if (!w) return;
+  const s = view.s, ox = r.width / 2 - view.x * s, oz = r.height / 2 - view.z * s;
+  const bx0 = -ox / s, bz0 = -oz / s, bx1 = (r.width - ox) / s, bz1 = (r.height - oz) / s;
+
+  if (opts.terrain && state.terrain) {
+    ctx.imageSmoothingEnabled = false;
+    for (let rx = Math.floor(bx0 / 512); rx <= Math.floor(bx1 / 512); rx++)
+      for (let rz = Math.floor(bz0 / 512); rz <= Math.floor(bz1 / 512); rz++) {
+        const v = w.tiles[rx + "," + rz];
+        if (v == null) continue;
+        const img = tile(w.id, rx, rz, v);
+        if (img) ctx.drawImage(img, ox + rx * 512 * s, oz + rz * 512 * s, 512 * s, 512 * s);
+      }
+    ctx.fillStyle = "rgba(11,13,15,.35)";
+    ctx.fillRect(0, 0, r.width, r.height);
+  }
+
+  const base = colorOf(w), cs = 16 * s, c = w.chunks;
+  const alphaThread = [0.22, 0.45, 0.62];
+  for (let i = 0; i < c.length; i += 3) {
+    const x = ox + c[i] * cs, z = oz + c[i + 1] * cs;
+    if (x > r.width || z > r.height || x + cs < 0 || z + cs < 0) continue;
+    const code = c[i + 2] & 3;
+    if (opts.mode === "thread") { ctx.globalAlpha = alphaThread[code]; ctx.fillStyle = base; }
+    else { ctx.globalAlpha = code === 0 ? 0.35 : 0.55; ctx.fillStyle = LOAD[code][0]; }
+    ctx.fillRect(x, z, Math.max(cs, 1), Math.max(cs, 1));
+  }
+  ctx.globalAlpha = 1;
+  if (cs >= 4) {
+    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = Math.max(1, Math.min(2, cs / 8));
+    for (let i = 0; i < c.length; i += 3) if (c[i + 2] & 4) ctx.strokeRect(ox + c[i] * cs + 1, oz + c[i + 1] * cs + 1, cs - 2, cs - 2);
+  } else {
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < c.length; i += 3) if (c[i + 2] & 4) ctx.fillRect(ox + c[i] * cs - 1, oz + c[i + 1] * cs - 1, 3, 3);
+  }
+
+  if (opts.grid && cs >= 6) {
+    ctx.strokeStyle = "rgba(255,255,255,.08)"; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x = Math.floor(bx0 / 16) * 16; x <= bx1; x += 16) { const px = Math.round(ox + x * s) + .5; ctx.moveTo(px, 0); ctx.lineTo(px, r.height); }
+    for (let z = Math.floor(bz0 / 16) * 16; z <= bz1; z += 16) { const pz = Math.round(oz + z * s) + .5; ctx.moveTo(0, pz); ctx.lineTo(r.width, pz); }
+    ctx.stroke();
+  }
+
+  const b = w.border;
+  if (b.size < 5e6) {
+    ctx.setLineDash([8, 6]); ctx.strokeStyle = "#f06a5a"; ctx.lineWidth = 2;
+    ctx.strokeRect(ox + (b.x - b.size / 2) * s, oz + (b.z - b.size / 2) * s, b.size * s, b.size * s);
+    ctx.setLineDash([]);
+  }
+
+  ctx.font = "600 12px system-ui, sans-serif"; ctx.textBaseline = "middle";
+  for (const p of w.players) {
+    const x = ox + p.x * s, z = oz + p.z * s;
+    ctx.beginPath(); ctx.arc(x, z, 5, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = "#0b0d0f"; ctx.stroke();
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.8)"; ctx.strokeText(p.name, x + 9, z);
+    ctx.fillStyle = "#fff"; ctx.fillText(p.name, x + 9, z);
+  }
+}
+
+function hover(mx, my) {
+  const w = cur(), el = $("hover");
+  if (!w) return;
+  const r = cv.getBoundingClientRect();
+  const bx = Math.floor((mx - r.width / 2) / view.s + view.x), bz = Math.floor((my - r.height / 2) / view.s + view.z);
+  const cx = bx >> 4, cz = bz >> 4, code = chunkIndex.get(cx + "," + cz);
+  const lines = ['<span class="k">Block</span> ' + bx + ", " + bz + ' &nbsp; <span class="k">Chunk</span> ' + cx + ", " + cz];
+  if (code == null) lines.push('<span class="k">Not loaded</span>');
+  else {
+    lines.push(LOAD[code & 3][1] + (code & 4 ? " · <b>force-loaded</b>" : ""));
+    lines.push('<span class="k">Ticked by</span> ' + esc(w.where));
+  }
+  el.innerHTML = lines.join("<br>");
+  el.hidden = false;
+}
+
+let drag = null;
+const pointers = new Map();
+cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); pointers.set(e.pointerId, e); drag = { x: e.clientX, z: e.clientY, vx: view.x, vz: view.z }; cv.classList.add("drag"); });
+cv.addEventListener("pointermove", e => {
+  const r = cv.getBoundingClientRect();
+  if (pointers.size === 2 && pointers.has(e.pointerId)) {
+    const [a, b] = [...pointers.values()];
+    const d0 = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    pointers.set(e.pointerId, e);
+    const [c1, c2] = [...pointers.values()];
+    const d1 = Math.hypot(c1.clientX - c2.clientX, c1.clientY - c2.clientY);
+    if (d0 > 0) { view.s = clampS(view.s * d1 / d0); draw(); }
+    return;
+  }
+  if (drag && pointers.has(e.pointerId)) {
+    view.x = drag.vx - (e.clientX - drag.x) / view.s; view.z = drag.vz - (e.clientY - drag.z) / view.s; draw();
+  }
+  hover(e.clientX - r.left, e.clientY - r.top);
+});
+const up = e => { pointers.delete(e.pointerId); if (!pointers.size) { drag = null; cv.classList.remove("drag"); } };
+cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+cv.addEventListener("pointerleave", () => { $("hover").hidden = true; });
+cv.addEventListener("wheel", e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), mx = e.clientX - r.left - r.width / 2, my = e.clientY - r.top - r.height / 2;
+  const bx = mx / view.s + view.x, bz = my / view.s + view.z;
+  view.s = clampS(view.s * Math.pow(1.0015, -e.deltaY));
+  view.x = bx - mx / view.s; view.z = bz - my / view.s; draw();
+}, { passive: false });
+
+function setToggle(id, on) { $(id).classList.toggle("on", on); }
+$("byThread").onclick = () => { opts.mode = "thread"; store.set("mode", "thread"); setToggle("byThread", true); setToggle("byLoad", false); render(); };
+$("byLoad").onclick = () => { opts.mode = "load"; store.set("mode", "load"); setToggle("byThread", false); setToggle("byLoad", true); render(); };
+$("tTerrain").onclick = () => { opts.terrain = !opts.terrain; store.set("terrain", opts.terrain); setToggle("tTerrain", opts.terrain); draw(); };
+$("tGrid").onclick = () => { opts.grid = !opts.grid; store.set("grid", opts.grid); setToggle("tGrid", opts.grid); draw(); };
+$("fit").onclick = fit;
+$("zin").onclick = () => { view.s = clampS(view.s * 1.5); draw(); };
+$("zout").onclick = () => { view.s = clampS(view.s / 1.5); draw(); };
+setToggle("byThread", opts.mode === "thread"); setToggle("byLoad", opts.mode === "load");
+setToggle("tTerrain", opts.terrain); setToggle("tGrid", opts.grid);
+window.addEventListener("resize", draw);
+poll();
+</script>
+</body>
+</html>

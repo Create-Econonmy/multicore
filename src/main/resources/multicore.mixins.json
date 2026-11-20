@@ -17,6 +17,7 @@
     "compat.sable.RapierPhysicsPipelineMixin",
     "compat.sable.SubLevelPhysicsSystemMixin",
     "core.BlockableEventLoopAccessor",
+    "core.ChunkMapAccessor",
     "core.BlockEntityTypeMixin",
     "core.BlockMixin",
     "core.BlockStateBaseMixin",
