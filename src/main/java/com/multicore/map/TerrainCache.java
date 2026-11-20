@@ -113,7 +113,7 @@ final class TerrainCache {
                     while (y > minY && !chunk.getBlockState(pos.set(baseX + x, y, baseZ + z)).isAir()) y--;
                     while (y > minY && chunk.getBlockState(pos.set(baseX + x, y, baseZ + z)).isAir()) y--;
                 } else {
-                    y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
+                    y = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
                 }
                 BlockState state = chunk.getBlockState(pos.set(baseX + x, y, baseZ + z));
                 MapColor mc = state.getMapColor(level, pos);

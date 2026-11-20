@@ -21,17 +21,18 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: v
 .stat { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
 .stat b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
 .stat span { color: var(--dim); font-size: 11px; }
-.thread { border: 1px solid var(--line); border-left: 4px solid var(--c); background: var(--panel2); border-radius: 6px; padding: 7px 9px; margin-bottom: 6px; }
-.thread .top { display: flex; justify-content: space-between; font-weight: 600; }
+.thread { border: 1px solid var(--line); border-left: 4px solid var(--c); background: var(--panel2); border-radius: 6px; padding: 7px 5px 5px; margin-bottom: 8px; }
+.thread .top { display: flex; justify-content: space-between; font-weight: 600; padding: 0 4px 4px; }
 .thread .top em { font-style: normal; color: var(--dim); font-weight: 400; font-variant-numeric: tabular-nums; }
-.thread .dims { color: var(--dim); font-size: 12px; margin-top: 2px; }
-.world { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left;
-  background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 6px; padding: 6px 8px; cursor: pointer; font: inherit; }
-.world:hover { background: var(--panel2); }
-.world.sel { background: var(--panel2); border-color: var(--line); }
-.world .dot { width: 10px; height: 10px; border-radius: 2px; background: var(--c); }
+.world { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left;
+  background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 5px; padding: 5px 6px; cursor: pointer; font: inherit; }
+.world:hover { background: var(--panel); }
+.world.sel { background: var(--panel); border-color: var(--c); }
 .world small { display: block; color: var(--dim); font-size: 11px; }
-.world .n { color: var(--dim); font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
+.world .n { color: var(--dim); font-variant-numeric: tabular-nums; font-size: 11px; text-align: right; white-space: nowrap; }
+#empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 340px; text-align: center;
+  background: rgba(24,28,32,.94); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; color: var(--dim); pointer-events: none; }
+#empty b { color: var(--text); display: block; margin-bottom: 4px; }
 .legend div { display: flex; align-items: center; gap: 8px; margin: 4px 0; color: var(--dim); }
 .legend i { width: 14px; height: 14px; border-radius: 2px; display: inline-block; flex: none; }
 .player { display: flex; justify-content: space-between; padding: 3px 6px; border-radius: 4px; cursor: pointer; }
@@ -73,10 +74,8 @@ canvas.drag { cursor: grabbing; }
       <div class="stat"><b id="par">–</b><span>parallel part (ms)</span></div>
       <div class="stat"><b id="speed">–</b><span>vs one thread</span></div>
     </div>
-    <h2>Dimension threads</h2>
+    <h2>Threads and their worlds</h2>
     <div id="threads"></div>
-    <h2>Worlds</h2>
-    <div id="worlds"></div>
     <h2>Players here</h2>
     <div id="players" class="sub"></div>
     <h2>Legend</h2>
@@ -93,6 +92,7 @@ canvas.drag { cursor: grabbing; }
       <button id="zin">+</button><button id="zout">−</button>
     </div>
     <div id="status">–</div>
+    <div id="empty" hidden></div>
     <div id="hover" hidden></div>
   </main>
 </div>
@@ -149,38 +149,26 @@ function render() {
   $("speed").textContent = state.parallelMs > 0 ? (state.oneThreadMs / state.parallelMs).toFixed(2) + "×" : "–";
   $("auto").textContent = "Auto-adjust: " + state.autoAdjust;
 
-  const th = $("threads");
-  th.innerHTML = state.threads.length ? "" : '<div class="sub">No dimension threads right now – every world ticks on the main thread.</div>';
+  // One card per thread with its worlds inside; worlds ticked on the main thread get a card of their own.
+  const row = x => {
+    const loaded = x.counts.entity + x.counts.block + x.counts.border;
+    const why = x.thread >= 0 ? "" : x.where.replace(/^main thread ?/, "").replace(/[()]/g, "");
+    return '<button class="world' + (x.id === world ? " sel" : "") + '" data-id="' + esc(x.id) + '"><span>' + esc(nameOf(x.id)) +
+      "<small>" + (x.avgMs != null ? x.avgMs.toFixed(2) + " ms/tick" : "–") + (why ? " · " + esc(why) : "") + "</small></span>" +
+      '<span class="n">' + loaded + " chunks<br>" + x.players.length + " player" + (x.players.length === 1 ? "" : "s") + "</span></button>";
+  };
+  const card = (title, color, ms, list) => '<div class="thread" style="--c:' + color + '"><div class="top">' + title +
+    (ms != null ? "<em>" + ms.toFixed(2) + " ms/tick</em>" : "") + "</div>" + list.map(row).join("") + "</div>";
+  let html = "";
   for (const t of state.threads) {
-    const el = document.createElement("div");
-    el.className = "thread";
-    el.style.setProperty("--c", PALETTE[t.index % PALETTE.length]);
-    el.innerHTML = '<div class="top">Thread ' + (t.index + 1) + "<em>" + t.avgMs.toFixed(2) + " ms/tick</em></div>" +
-      '<div class="dims">' + t.dims.map(d => esc(nameOf(d))).join(" + ") + "</div>";
-    th.appendChild(el);
+    html += card("Thread " + (t.index + 1), PALETTE[t.index % PALETTE.length], t.avgMs,
+      t.dims.map(d => state.worlds.find(x => x.id === d)).filter(Boolean));
   }
   const onMain = state.worlds.filter(x => x.thread < 0);
-  if (onMain.length && state.threads.length) {
-    const el = document.createElement("div");
-    el.className = "thread";
-    el.style.setProperty("--c", MAIN_COLOR);
-    el.innerHTML = '<div class="top">Main thread</div><div class="dims">' + onMain.map(d => esc(nameOf(d.id))).join(" + ") + "</div>";
-    th.appendChild(el);
-  }
-
-  const wl = $("worlds");
-  wl.innerHTML = "";
-  for (const x of state.worlds) {
-    const b = document.createElement("button");
-    b.className = "world" + (x.id === world ? " sel" : "");
-    b.style.setProperty("--c", colorOf(x));
-    const loaded = x.counts.entity + x.counts.block + x.counts.border;
-    b.innerHTML = '<span class="dot"></span><span>' + esc(nameOf(x.id)) + "<small>" + esc(x.where) +
-      (x.avgMs != null ? " · " + x.avgMs.toFixed(2) + " ms" : "") + "</small></span>" +
-      '<span class="n">' + loaded + " ch<br>" + x.players.length + " pl</span>";
-    b.onclick = () => { world = x.id; store.set("world", world); render(); };
-    wl.appendChild(b);
-  }
+  if (onMain.length) html += card(state.threads.length ? "Main thread" : "Main thread (no dimension threads right now)", MAIN_COLOR,
+    onMain.reduce((a, x) => a + (x.avgMs || 0), 0), onMain);
+  const th = $("threads");
+  if (th.dataset.html !== html) { th.dataset.html = html; th.innerHTML = html; } // rebuild only on change, so clicks are not lost
 
   const pl = $("players");
   pl.innerHTML = w.players.length ? "" : "Nobody in " + esc(nameOf(w.id)) + ".";
@@ -206,9 +194,28 @@ function render() {
 
   chunkIndex = new Map();
   const c = w.chunks;
-  for (let i = 0; i < c.length; i += 3) chunkIndex.set(c[i] + "," + c[i + 1], c[i + 2]);
-  if (!fitted[w.id]) { fitted[w.id] = true; fit(); }
+  let inside = 0, outside = 0;
+  for (let i = 0; i < c.length; i += 3) {
+    chunkIndex.set(c[i] + "," + c[i + 1], c[i + 2]);
+    if (inBorder(w, c[i], c[i + 1])) inside++; else outside++;
+  }
+  if (outside) lg.innerHTML += '<div style="margin-top:6px">' + outside + " more loaded chunk" + (outside === 1 ? " is" : "s are") +
+    " far outside the border (Sable ship plots). They are left out of “Fit loaded”.</div>";
+  // Fit once per world, and once more the first time something gets loaded there.
+  const want = inside || w.players.length ? "full" : "empty";
+  if (fitted[w.id] !== want && fitted[w.id] !== "full") { fitted[w.id] = want; fit(); }
+  const empty = $("empty");
+  empty.hidden = !!(inside || w.players.length);
+  if (!empty.hidden) empty.innerHTML = "<b>Nothing loaded in " + esc(nameOf(w.id)) + " right now</b>" +
+    "Chunks show up here while players are in this world or chunks are force-loaded." +
+    (outside ? " Only Sable ship plots (outside the border) are loaded." : "");
   draw();
+}
+
+/** Chunk inside the world border, with a little margin (Sable keeps ship plots millions of blocks away). */
+function inBorder(w, cx, cz) {
+  const b = w.border, half = b.size / 2 + 64;
+  return cx * 16 + 16 > b.x - half && cx * 16 < b.x + half && cz * 16 + 16 > b.z - half && cz * 16 < b.z + half;
 }
 
 function fit() {
@@ -216,10 +223,16 @@ function fit() {
   if (!w) return;
   const c = w.chunks;
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-  for (let i = 0; i < c.length; i += 3) { x0 = Math.min(x0, c[i]); x1 = Math.max(x1, c[i]); z0 = Math.min(z0, c[i + 1]); z1 = Math.max(z1, c[i + 1]); }
-  if (!isFinite(x0)) {
-    const b = w.border, half = Math.min(b.size / 2, 2000);
-    x0 = (b.x - half) / 16; x1 = (b.x + half) / 16; z0 = (b.z - half) / 16; z1 = (b.z + half) / 16;
+  for (let i = 0; i < c.length; i += 3) {
+    if (!inBorder(w, c[i], c[i + 1])) continue;
+    x0 = Math.min(x0, c[i]); x1 = Math.max(x1, c[i]); z0 = Math.min(z0, c[i + 1]); z1 = Math.max(z1, c[i + 1]);
+  }
+  for (const p of w.players) {
+    x0 = Math.min(x0, (p.x >> 4) - 4); x1 = Math.max(x1, (p.x >> 4) + 4); z0 = Math.min(z0, (p.z >> 4) - 4); z1 = Math.max(z1, (p.z >> 4) + 4);
+  }
+  if (!isFinite(x0)) { // nothing loaded: the area around the world's centre
+    const b = w.border, half = Math.min(b.size / 2, 600);
+    x0 = Math.floor((b.x - half) / 16); x1 = Math.floor((b.x + half) / 16); z0 = Math.floor((b.z - half) / 16); z1 = Math.floor((b.z + half) / 16);
   }
   const r = cv.getBoundingClientRect();
   if (r.width < 20 || r.height < 20) { fitted[w.id] = false; return; } // not laid out yet: fit on the next update
@@ -367,6 +380,11 @@ $("tGrid").onclick = () => { opts.grid = !opts.grid; store.set("grid", opts.grid
 $("fit").onclick = fit;
 $("zin").onclick = () => { view.s = clampS(view.s * 1.5); draw(); };
 $("zout").onclick = () => { view.s = clampS(view.s / 1.5); draw(); };
+$("threads").addEventListener("click", e => {
+  const b = e.target.closest(".world");
+  if (!b) return;
+  world = b.dataset.id; store.set("world", world); render();
+});
 setToggle("byThread", opts.mode === "thread"); setToggle("byLoad", opts.mode === "load");
 setToggle("tTerrain", opts.terrain); setToggle("tGrid", opts.grid);
 window.addEventListener("resize", draw);
