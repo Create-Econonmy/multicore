@@ -86,6 +86,9 @@ public abstract class ServerChunkCacheMixin implements ServerChunkCacheAccessor 
             CrossLevel.noteAccess("adds a chunk ticket in another dimension (deferred to end of tick)", this.level);
             SerialQueue.defer("addRegionTicket", () -> self.addRegionTicket(type, pos, distance, value, forceTicks));
             ci.cancel();
+        } else if (com.multicore.core.RegionTicker.defer(this.level,
+                () -> ((ServerChunkCache) (Object) this).addRegionTicket(type, pos, distance, value, forceTicks))) {
+            ci.cancel();
         }
     }
 
@@ -96,6 +99,9 @@ public abstract class ServerChunkCacheMixin implements ServerChunkCacheAccessor 
             ServerChunkCache self = (ServerChunkCache) (Object) this;
             SerialQueue.defer("removeRegionTicket", () -> self.removeRegionTicket(type, pos, distance, value, forceTicks));
             ci.cancel();
+        } else if (com.multicore.core.RegionTicker.defer(this.level,
+                () -> ((ServerChunkCache) (Object) this).removeRegionTicket(type, pos, distance, value, forceTicks))) {
+            ci.cancel();
         }
     }
 
@@ -104,6 +110,8 @@ public abstract class ServerChunkCacheMixin implements ServerChunkCacheAccessor 
         if (CrossDimension.mustDeferWriteTo(this.level)) {
             ServerChunkCache self = (ServerChunkCache) (Object) this;
             SerialQueue.defer("updateChunkForced", () -> self.updateChunkForced(pos, add));
+            ci.cancel();
+        } else if (com.multicore.core.RegionTicker.defer(this.level, () -> ((ServerChunkCache) (Object) this).updateChunkForced(pos, add))) {
             ci.cancel();
         }
     }

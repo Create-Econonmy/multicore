@@ -77,6 +77,10 @@ public final class MultiCore {
                 gameTests ? java.util.List.of() : MultiCoreConfig.THREAD_GROUPS.get());
         ContentPolicy.configure(MultiCoreConfig.SERIALIZE_UNSAFE_MODS.get(), MultiCoreConfig.THREAD_SAFE_MODS.get(),
                 MultiCoreConfig.THREAD_SAFE_LISTENERS.get());
+        ContentPolicy.configureRegions(MultiCoreConfig.REGION_SAFE_MODS.get(), MultiCoreConfig.REGION_SAFE_LISTENERS.get());
+        com.multicore.core.RegionTicker.configure(MultiCoreConfig.REGIONS_ENABLED.get(), MultiCoreConfig.REGION_SIZE_CHUNKS.get(),
+                MultiCoreConfig.REGION_THREADS.get(), MultiCoreConfig.REGION_MIN_ENTITIES.get(),
+                MultiCoreConfig.REGION_MIN_BLOCK_ENTITIES.get(), MultiCoreConfig.REGION_EXCLUDED_DIMENSIONS.get());
         CrossDimension.setDeferWrites(MultiCoreConfig.DEFER_CROSS_DIMENSION_WRITES.get());
         CrossLevel.setLogging(MultiCoreConfig.LOG_CROSS_DIMENSION_ACCESS.get());
         // The GameTest server keeps auto-adjust off: its tests check where each dimension ticks. Its own tests turn it on.

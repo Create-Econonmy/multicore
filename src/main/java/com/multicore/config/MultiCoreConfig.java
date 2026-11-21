@@ -29,6 +29,14 @@ public final class MultiCoreConfig {
     public static final ModConfigSpec.IntValue AUTO_LOAD_SECONDS;
     public static final ModConfigSpec.DoubleValue AUTO_MIN_SPEEDUP;
     public static final ModConfigSpec.IntValue AUTO_RETRY_MINUTES;
+    public static final ModConfigSpec.BooleanValue REGIONS_ENABLED;
+    public static final ModConfigSpec.IntValue REGION_SIZE_CHUNKS;
+    public static final ModConfigSpec.IntValue REGION_THREADS;
+    public static final ModConfigSpec.IntValue REGION_MIN_ENTITIES;
+    public static final ModConfigSpec.IntValue REGION_MIN_BLOCK_ENTITIES;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> REGION_EXCLUDED_DIMENSIONS;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> REGION_SAFE_MODS;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> REGION_SAFE_LISTENERS;
     public static final ModConfigSpec.BooleanValue MAP_ENABLED;
     public static final ModConfigSpec.ConfigValue<String> MAP_BIND;
     public static final ModConfigSpec.IntValue MAP_PORT;
@@ -128,6 +136,39 @@ public final class MultiCoreConfig {
         LOG_CROSS_DIMENSION_ACCESS = b.comment(
                         "Log the first time each mod reaches into another dimension from a dimension thread (with a stack trace).")
                 .define("logCrossDimensionAccess", true);
+        b.pop();
+
+        b.push("regions");
+        REGIONS_ENABLED = b.comment(
+                        "Region threading: one busy dimension ticked by several threads at once (like Folia).",
+                        "Every tick, the entities and the block entities of a dimension are grouped into regions: squares of regionSizeChunks",
+                        "that have something in them, joined with the squares around them. Regions are at least one empty square apart",
+                        "(128 blocks with the default 8), so players far apart in the same world get their own thread.",
+                        "Spawning, removing and moving entities, scheduled block ticks and chunk tickets from a region thread are applied",
+                        "by the dimension thread right after, in order. Only works on dimensions that tick on a dimension thread.")
+                .define("enabled", true);
+        REGION_SIZE_CHUNKS = b.comment("Size of a square in chunks (rounded down to 2, 4, 8, 16, 32...). Regions are one square apart at least.")
+                .defineInRange("regionSizeChunks", 8, 2, 64);
+        REGION_THREADS = b.comment("At most this many region threads per dimension (0 = the CPU's logical cores minus 2, between 2 and 8).")
+                .defineInRange("threadsPerDimension", 0, 0, 64);
+        REGION_MIN_ENTITIES = b.comment("Only split a dimension's entities when it has at least this many ticking.")
+                .defineInRange("minEntities", 32, 0, 1_000_000);
+        REGION_MIN_BLOCK_ENTITIES = b.comment("Only split a dimension's block entities when it has at least this many ticking.")
+                .defineInRange("minBlockEntities", 64, 0, 1_000_000);
+        REGION_EXCLUDED_DIMENSIONS = b.comment("Dimensions that are never split, e.g. [\"minecraft:the_end\"].")
+                .defineListAllowEmpty("excludedDimensions", List.of(), () -> "", o -> o instanceof String);
+        REGION_SAFE_MODS = b.comment(
+                        "Mod ids whose code may run on several region threads of the same dimension at once. Code of every other mod",
+                        "(even threadSafeMods) holds the mod lock on a region thread: a mod may keep state per dimension.")
+                .defineListAllowEmpty("regionSafeMods", List.of("minecraft", "neoforge", "multicore"), () -> "", o -> o instanceof String);
+        REGION_SAFE_LISTENERS = b.comment(
+                        "Single event listeners that may run on several region threads of one dimension at once (\"modid:EventName\").",
+                        "The defaults only touch the entity they are given.")
+                .defineListAllowEmpty("regionSafeListeners", List.of(
+                        "create:EntityTickEvent$Pre",
+                        "create:LivingBreatheEvent",
+                        "citadel:EntityTickEvent$Post"
+                ), () -> "", o -> o instanceof String);
         b.pop();
 
         b.push("map");

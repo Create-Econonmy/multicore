@@ -10,7 +10,7 @@ Lithium, KubeJS and ~180 other mods).
 Vanilla (and NeoForge) tick every dimension one after another on a single thread. The Create Economy server runs
 several dimensions (South, North, War, Shop, Creative, Nether, End), so one busy world slows every other world down.
 
-MultiCore ticks each dimension on its own thread, like Folia's regions but with one region per dimension:
+MultiCore ticks each dimension on its own thread, and splits a busy dimension further into regions (see "Region threads" below):
 
 ```
 serial   : time sync, LevelTickEvent.Pre for every dimension      (main thread)
@@ -63,10 +63,45 @@ only acts once the server's real tick time (vanilla's 100-tick average) has stay
 `/multicore status` shows each dimension's thread, average cost and players, and the last decision.
 `/multicore auto on|off` switches it until the next restart. The GameTest server keeps it off except in its own tests.
 
-Not done: splitting one busy dimension into several regions. On this pack nearly all of a busy dimension's work is
-Create and other mods that run under the shared mod lock, so sub-regions would take turns on that lock and gain
-little, while every shared per-level structure (entity sections, block updates, lighting, scheduled ticks) would need
-new locking. It becomes worth it once Create is checked and added to `threadSafeMods`.
+## Region threads: one world on several threads
+
+A busy dimension is split further, like Folia (`[regions]` in the config, on by default). Every tick, inside the
+dimension's own thread:
+
+```
+entities        : grouped into regions -> each region on its own "MultiCore <dim> region N" thread
+                  dimension thread applies what the regions queued (spawns, removals, section moves, block ticks...)
+block entities  : the same, after the entities (vanilla order: all entities, then all block entities)
+everything else : (weather, block ticks, chunk ticking, raids, block events) on the dimension thread as before
+```
+
+**Regions.** The world is cut into squares of `regionSizeChunks` (8 chunks = 128 blocks). Squares with something
+ticking in them are joined with the eight squares around them; each joined group is a region. So two regions are
+always at least one empty square (128 blocks) apart, and players far from each other in the same world get their own
+thread. Regions are packed onto at most `threadsPerDimension` threads (0 = cores - 2, 2 to 8), biggest first. A dimension
+with fewer than `minEntities` (32) entities or `minBlockEntities` (64) block entities, or only one region, is not split.
+
+**What keeps it safe.** Region threads never change the dimension's shared structures themselves:
+
+| Shared structure | On a region thread |
+|---|---|
+| Spawning (`addFreshEntity` and friends), new block entity tickers, block events, chunk tickets and forced chunks | Queued, applied by the dimension thread right after the split, in order. |
+| An entity moving into another 16x16x16 section | The section change runs once after the split, from the final position. |
+| An entity removed (killed, discarded) | Flagged removed at once (every check and every region-thread query skips it), taken out of the lists after the split. |
+| Scheduled block / fluid ticks | Queued (`LevelTicks.schedule`). |
+| Neighbour updates (redstone, block updates) | Each region thread has its own updater. |
+| Path updates after a block change | Only the mobs of that region re-plan; the "updating" flag is per thread. |
+| Chunks: reading | Loaded chunks are read directly (the chunk map is copy-on-write). |
+| Chunks: loading one | The region thread waits; its dimension thread pauses every region thread (a read-write lock: region threads hold the read side while ticking one entity or block entity) and runs the chunk tasks. |
+| Points of interest (villager beds, job sites), the raid list | Synchronized. |
+| Mod code | Holds the mod lock unless the mod is in `regionSafeMods` (default: minecraft, neoforge, multicore). Being in `threadSafeMods` is not enough: a mod may keep state per dimension. Single listeners can be listed in `regionSafeListeners`. |
+| A threading error in a region thread anyway | Logged; region threading switches off for the session, dimension threads keep running. |
+
+A dimension that is the only one on a dimension thread still gets that thread when regions are on, because only there
+can it be split. `/multicore status` shows the last split per dimension ("entities: 812 in 3 regions on 3 threads").
+
+What it gains depends on what ticks. Vanilla mobs, item entities, hoppers, furnaces and redstone run fully in parallel
+across regions; Create and other mods outside `regionSafeMods` take turns on the mod lock, as they do between dimensions.
 
 ## Commands (op level 3)
 
@@ -85,6 +120,9 @@ new locking. It becomes worth it once Create is checked and added to `threadSafe
 - `compatibility.threadSafeMods`: mods that were checked and may run on several dimension threads at once.
 - `compatibility.threadSafeListeners`: single listeners, as `modid:EventName`, that were checked. The defaults are the
   Create, Citadel, Fluid and Blocks You Need entity-tick listeners, which only touch the entity they are given.
+- `regions.enabled`, `regionSizeChunks`, `threadsPerDimension`, `minEntities`, `minBlockEntities`, `excludedDimensions`:
+  region threads (above).
+- `regions.regionSafeMods` / `regionSafeListeners`: mod code that may run on several region threads of one dimension.
 
 ## Measured so far
 
@@ -179,6 +217,11 @@ Small test (512 MB, only the jars in `run/gametest-light/mods`, e.g. the Create 
 
 ## Known limitations
 
-- Parallelism is per dimension. A single busy dimension is not split into regions yet (that is the next stage).
+- Region threads split entities and block entities only. Block ticks, random ticks, mob spawning and chunk loading
+  of a dimension stay on its dimension thread.
+- Inside a split, an entity that moved into another section is found there by queries only after the split, and
+  something spawned on a region thread joins the world right after the split (the same tick).
+- Something that reaches more than 128 blocks into another region in one tick (a very long teleport) still works but
+  races with that region's thread. Vanilla has nothing like that except ender pearls thrown that far.
 - Mods outside `threadSafeMods` share one lock, so most Create content in different dimensions still takes turns.
   Checking Create and adding it to `threadSafeMods` is the biggest remaining performance win.

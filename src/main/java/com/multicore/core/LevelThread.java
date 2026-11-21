@@ -15,7 +15,7 @@ import net.neoforged.fml.util.thread.SidedThreadGroups;
  * <p>
  * It is created in NeoForge's SERVER thread group so {@code EffectiveSide.get()} still reports the server side.
  */
-public final class LevelThread extends Thread {
+public class LevelThread extends Thread {
     private final ParallelTicker ticker;
     private volatile ServerLevel[] levels;
     private volatile Phase pending;
@@ -28,6 +28,21 @@ public final class LevelThread extends Thread {
     long lastLockWaitNanos;
     /** This thread's copy of RedStoneWireBlock's shared "shouldSignal" switch (see RedStoneWireBlockMixin). */
     public boolean redstoneWireSilenced;
+    /** Region threads of this dimension thread (see {@link RegionTicker}); created on first use. Only this thread uses it. */
+    RegionThread[] regionWorkers = new RegionThread[0];
+    /** Block entities collected for a region split during Level.tickBlockEntities (see {@link RegionTicker}). */
+    java.util.List<Object> collectedBlockEntities;
+    net.minecraft.world.level.Level collectingFor;
+
+    /** For {@link RegionThread}. */
+    protected LevelThread(String name, ServerLevel level, ClassLoader contextLoader) {
+        super(SidedThreadGroups.SERVER, null, name);
+        this.ticker = null;
+        this.levels = new ServerLevel[] {level};
+        this.setDaemon(true);
+        this.setContextClassLoader(contextLoader);
+        this.setUncaughtExceptionHandler((t, e) -> MultiCore.LOGGER.error("MultiCore thread {} died", t.getName(), e));
+    }
 
     LevelThread(ParallelTicker ticker, ServerLevel[] levels, int index, ClassLoader contextLoader) {
         super(SidedThreadGroups.SERVER, null, "MultiCore " + index);
@@ -78,6 +93,9 @@ public final class LevelThread extends Thread {
     void retire() {
         this.retired = true;
         LockSupport.unpark(this);
+        for (RegionThread worker : this.regionWorkers) {
+            worker.retire();
+        }
     }
 
     boolean isRetired() {
@@ -145,6 +163,23 @@ public final class LevelThread extends Thread {
         }
         boolean worked = false;
         for (ServerLevel level : this.levels) {
+            try {
+                worked |= level.getChunkSource().pollTask();
+            } catch (Throwable t) {
+                MultiCore.LOGGER.error("Error running chunk task for {} while waiting", level.dimension().location(), t);
+            }
+        }
+        return worked;
+    }
+
+    /** Like {@link #pollOwnTasks} but leaves {@code skip} alone (it is in a region split, see {@link RegionTicker}). */
+    boolean pollOtherLevels(ServerLevel skip) {
+        if (ChunkSystemGuard.inside()) {
+            return false;
+        }
+        boolean worked = false;
+        for (ServerLevel level : this.levels) {
+            if (level == skip) continue;
             try {
                 worked |= level.getChunkSource().pollTask();
             } catch (Throwable t) {

@@ -26,11 +26,32 @@ public final class ContentPolicy {
     }
 
     private static volatile Set<String> safeListeners = Set.of();
+    private static volatile Set<String> regionSafeNamespaces = Set.of("minecraft", "neoforge", "multicore");
+    private static volatile Set<String> regionSafeListeners = Set.of();
+    /** Some thread-safe mods are not region-safe: region threads must look again. */
+    private static volatile boolean regionStricter;
+    private static final java.util.Map<String, LockSource> REGION_SOURCES = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Mods (and single listeners) whose code may run on several region threads of the same dimension at once. Being
+     * safe on different dimensions (threadSafeMods) is not enough: a mod may keep state per dimension.
+     */
+    public static void configureRegions(Collection<? extends String> safeMods, Collection<? extends String> listeners) {
+        regionSafeNamespaces = Set.copyOf(safeMods);
+        regionSafeListeners = Set.copyOf(listeners);
+        regionStricter = !regionSafeNamespaces.containsAll(safeNamespaces) || !regionSafeListeners.containsAll(safeListeners);
+        generation++;
+    }
+
+    private static boolean onRegionThread() {
+        return Thread.currentThread() instanceof RegionThread;
+    }
 
     public static void configure(boolean serialize, Collection<? extends String> safeMods, Collection<? extends String> listeners) {
         serializeUnsafe = serialize;
         safeNamespaces = Set.copyOf(safeMods);
         safeListeners = Set.copyOf(listeners);
+        regionStricter = !regionSafeNamespaces.containsAll(safeNamespaces) || !regionSafeListeners.containsAll(safeListeners);
         generation++;
     }
 
@@ -39,12 +60,24 @@ public final class ContentPolicy {
     }
 
     public static boolean isSafeNamespace(@Nullable String namespace) {
-        return namespace != null && safeNamespaces.contains(namespace);
+        return namespace != null && safeNamespaces.contains(namespace)
+                && (!regionStricter || !onRegionThread() || regionSafeNamespaces.contains(namespace));
     }
 
     /** A mod's listeners for one event, listed as "modid:EventName" (nested events as "EntityTickEvent$Pre"). */
     public static boolean isSafeListener(String modId, String eventName) {
         return safeNamespaces.contains(modId) || safeListeners.contains(modId + ":" + eventName);
+    }
+
+    /** {@link #isSafeListener} for region threads. */
+    public static boolean isRegionSafeListener(String modId, String eventName) {
+        return isSafeListener(modId, eventName)
+                && (regionSafeNamespaces.contains(modId) || regionSafeListeners.contains(modId + ":" + eventName));
+    }
+
+    /** Does a region thread have to look again (some thread-safe mods are not region-safe)? */
+    public static boolean regionStricter() {
+        return regionStricter;
     }
 
     public static Set<String> safeNamespaces() {
@@ -83,7 +116,12 @@ public final class ContentPolicy {
             holder.multicore$setLockSource(unsafe ? LockSource.of(kind + id) : null);
             holder.multicore$setPolicyStamp(gen);
         }
-        return holder.multicore$lockSource();
+        LockSource source = holder.multicore$lockSource();
+        if (source == null && regionStricter && id != null && onRegionThread() && !regionSafeNamespaces.contains(id.getNamespace())) {
+            String name = kind + id + " (region)";
+            return REGION_SOURCES.computeIfAbsent(name, LockSource::of);
+        }
+        return source;
     }
 
     /** Implemented by mixins on BlockEntityType, EntityType and Block. */

@@ -208,6 +208,7 @@ public final class ListenerSerializer {
         private final LockSource source;
         /** Cached {@link ContentPolicy#isSafeListener} result, valid for {@link #stamp}'s config generation. */
         private volatile boolean safe;
+        private volatile boolean regionSafe;
         private volatile int stamp;
 
         Serialized(EventListener target, String modId, String eventName) {
@@ -221,9 +222,11 @@ public final class ListenerSerializer {
             int gen = ContentPolicy.generation();
             if (this.stamp != gen) {
                 this.safe = ContentPolicy.isSafeListener(this.modId, this.eventName);
+                this.regionSafe = ContentPolicy.isRegionSafeListener(this.modId, this.eventName);
                 this.stamp = gen;
             }
-            return this.safe;
+            // Region threads of one dimension need more than "safe on different dimensions".
+            return Thread.currentThread() instanceof RegionThread ? this.regionSafe : this.safe;
         }
 
         @Override

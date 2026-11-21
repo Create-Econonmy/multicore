@@ -40,8 +40,12 @@ public final class CrossLevel {
 
     @Nullable
     public static ChunkAccess getChunk(ServerChunkCache cache, int x, int z, ChunkStatus status, boolean load) {
-        Stats.CROSS_LEVEL_READS.increment();
-        noteAccess("reads chunks of another dimension", cache.getLevel());
+        // A region thread reading its own dimension is not a cross-dimension read.
+        boolean own = Thread.currentThread() instanceof RegionThread rt && rt.level() == cache.getLevel();
+        if (!own) {
+            Stats.CROSS_LEVEL_READS.increment();
+            noteAccess("reads chunks of another dimension", cache.getLevel());
+        }
         ChunkHolder holder = ((ServerChunkCacheAccessor) cache).multicore$getVisibleChunkIfPresent(ChunkPos.asLong(x, z));
         if (holder != null) {
             ChunkAccess chunk = holder.getChunkIfPresent(status);
@@ -70,7 +74,9 @@ public final class CrossLevel {
 
     @Nullable
     public static LevelChunk getChunkNow(ServerChunkCache cache, int x, int z) {
-        Stats.CROSS_LEVEL_READS.increment();
+        if (!(Thread.currentThread() instanceof RegionThread)) {
+            Stats.CROSS_LEVEL_READS.increment();
+        }
         ChunkHolder holder = ((ServerChunkCacheAccessor) cache).multicore$getVisibleChunkIfPresent(ChunkPos.asLong(x, z));
         if (holder == null) {
             return null;
@@ -88,6 +94,9 @@ public final class CrossLevel {
     public static void noteAccess(String what, @Nullable net.minecraft.world.level.Level target) {
         if (!logAccess || LOG_BUDGET.get() <= 0) {
             return;
+        }
+        if (target != null && Thread.currentThread() instanceof RegionThread rt && rt.level() == target) {
+            return; // a region thread in its own dimension
         }
         // Walking the stack costs microseconds. After the first few hundred accesses only look at a small sample, so a
         // mod that reads another dimension every tick does not slow the server down.

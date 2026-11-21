@@ -144,7 +144,7 @@ public final class ParallelTicker {
             return false;
         }
         TickThreads.setRealLevels(levels);
-        if (!this.isActive() || levels.length < 2) {
+        if (!this.isActive() || (levels.length < 2 && !RegionTicker.enabled())) {
             this.retireAll();
             return false;
         }
@@ -174,7 +174,8 @@ public final class ParallelTicker {
         }
 
         profiler.popPush("multicore_parallel");
-        if (parallel.size() >= 2) {
+        // One parallel dimension still gets its thread when regions are on: only there can it be split (see RegionTicker).
+        if (parallel.size() >= 2 || (parallel.size() == 1 && RegionTicker.enabled())) {
             this.runParallel(server, parallel, serial, hasTimeLeft, main, tickCount);
         } else {
             serial.addAll(0, parallel);

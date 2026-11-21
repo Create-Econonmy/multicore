@@ -18,6 +18,16 @@ public final class ManagedWait {
         LevelThread self = TickThreads.currentLevelThread();
         long start = System.nanoTime();
         long nextWarn = start + WARN_AFTER_NANOS;
+        // A region thread lets go of its region's read lock, so its dimension thread can run the chunk tasks it waits for.
+        int region = RegionTicker.beginWait();
+        try {
+            waitLoop(done, what, self, start, nextWarn);
+        } finally {
+            RegionTicker.endWait(region);
+        }
+    }
+
+    private static void waitLoop(BooleanSupplier done, String what, LevelThread self, long start, long nextWarn) {
         while (!done.getAsBoolean()) {
             if (self == null || !self.pollOwnTasks()) {
                 LockSupport.parkNanos(50_000L);
