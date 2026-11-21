@@ -75,12 +75,26 @@ public final class ThreadMap {
         if (http == null) return;
         try {
             if (server.getTickCount() % SNAPSHOT_EVERY_TICKS == 0) snapshot(server);
-            if (terrain) TERRAIN.work(server, TERRAIN_BUDGET_NANOS);
+            // Dimensions on their own thread colour their terrain there (afterLevelTick); only main-thread ones here.
+            if (terrain) TERRAIN.work(server, TERRAIN_BUDGET_NANOS, ParallelTicker.get()::tickedOnOwnThread);
             if (terrain && server.getTickCount() % (20 * 60 * 15) == 0) TERRAIN.save(dir(server));
         } catch (RuntimeException e) {
             if (!failed) {
                 failed = true;
                 MultiCore.LOGGER.warn("[MultiCore] map: snapshot failed (logged once)", e);
+            }
+        }
+    }
+
+    /** On a dimension thread, right after it ticked {@code level}: colour some of that dimension's terrain. */
+    public static void afterLevelTick(ServerLevel level) {
+        if (http == null || !terrain) return;
+        try {
+            TERRAIN.workLevel(level, TERRAIN_BUDGET_NANOS);
+        } catch (RuntimeException e) {
+            if (!failed) {
+                failed = true;
+                MultiCore.LOGGER.warn("[MultiCore] map: terrain failed (logged once)", e);
             }
         }
     }

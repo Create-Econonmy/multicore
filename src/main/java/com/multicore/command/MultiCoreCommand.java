@@ -18,7 +18,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
-/** /multicore status | on | off | auto on|off | locks [reset] */
+/** /multicore status | on | off | auto on|off | regions on|off | locks [reset] */
 public final class MultiCoreCommand {
     private MultiCoreCommand() {
     }
@@ -33,6 +33,9 @@ public final class MultiCoreCommand {
                 .then(Commands.literal("auto")
                         .then(Commands.literal("on").executes(ctx -> auto(ctx, true)))
                         .then(Commands.literal("off").executes(ctx -> auto(ctx, false))))
+                .then(Commands.literal("regions")
+                        .then(Commands.literal("on").executes(ctx -> regions(ctx, true)))
+                        .then(Commands.literal("off").executes(ctx -> regions(ctx, false))))
                 .then(Commands.literal("locks")
                         .executes(MultiCoreCommand::locks)
                         .then(Commands.literal("reset").executes(ctx -> {
@@ -49,6 +52,14 @@ public final class MultiCoreCommand {
         for (String line : LockSource.report(15)) {
             src.sendSuccess(() -> Component.literal(line).withStyle(ChatFormatting.GRAY), false);
         }
+        return 1;
+    }
+
+    /** Region threads on or off at once (until restart); dimension threads are not affected. */
+    private static int regions(CommandContext<CommandSourceStack> ctx, boolean on) {
+        com.multicore.core.RegionTicker.setEnabled(on);
+        ctx.getSource().sendSuccess(() -> Component.literal("MultiCore region threads " + (on ? "enabled" : "disabled")
+                + " (until restart; set [regions] enabled in config/multicore-common.toml to make it permanent)"), true);
         return 1;
     }
 
@@ -133,6 +144,14 @@ public final class MultiCoreCommand {
                         Stats.REGION_SPLITS.sum(), Stats.REGION_DEFERRED.sum(), Stats.REGION_EXCLUSIVE.sum(),
                         Stats.REGION_EXCLUSIVE_TIMEOUTS.sum()), ChatFormatting.WHITE);
         com.multicore.core.RegionTicker.lastSplits().forEach((dim, what) -> line(src, "  " + dim + ": ", what, ChatFormatting.WHITE));
+        // Everything else in the server's tick (player packets and movement, commands, mods' server-tick work, autosave)
+        // is vanilla's main-thread work: what is left of the tick after the parts MultiCore measures.
+        double measured = Stats.avgPreMs + Stats.avgWaitMs + Stats.avgDeferredMs + Stats.avgSerialLevelsMs + Stats.avgPostMs;
+        line(src, "Main thread per tick: ", String.format(Locale.ROOT,
+                "level-tick events %.2f ms (pre) + %.2f ms (post), deferred work %.2f ms, main-thread dimensions %.2f ms, "
+                        + "waiting for dimension threads %.2f ms, rest of the server tick (players, commands, mods' server tick) %.2f ms",
+                Stats.avgPreMs, Stats.avgPostMs, Stats.avgDeferredMs, Stats.avgSerialLevelsMs, Stats.avgWaitMs,
+                Math.max(0, Stats.avgServerTickMs - measured)), ChatFormatting.WHITE);
         line(src, "Mod lock: ", String.format(Locale.ROOT, "%d acquisitions, %.1f ms total waiting",
                 Stats.MOD_LOCK_ACQUIRES.sum(), Stats.MOD_LOCK_WAIT_NANOS.sum() / 1e6), ChatFormatting.GRAY);
         line(src, "Cross-dimension: ", String.format(Locale.ROOT, "%d reads, %d chunk loads, %d deferred actions",

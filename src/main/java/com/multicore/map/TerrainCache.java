@@ -42,8 +42,11 @@ final class TerrainCache {
     private final Map<String, ConcurrentHashMap<Long, Entry>> chunks = new ConcurrentHashMap<>();
     /** Per dimension: region (32x32 chunks) -> version, bumped whenever one of its chunks changes. */
     private final Map<String, ConcurrentHashMap<Long, Integer>> regions = new ConcurrentHashMap<>();
-    /** Main thread only. */
-    private final Map<String, LinkedHashSet<Long>> pending = new LinkedHashMap<>();
+    /**
+     * Chunks waiting to be coloured, per dimension. Filled by the main thread outside the parallel phase; each dimension's
+     * queue is then worked off by the thread that ticks that dimension (see {@link #workLevel}).
+     */
+    private final Map<String, LinkedHashSet<Long>> pending = new ConcurrentHashMap<>();
 
     ConcurrentHashMap<Long, Integer> regionVersions(String dim) {
         return this.regions.computeIfAbsent(dim, k -> new ConcurrentHashMap<>());
@@ -58,30 +61,51 @@ final class TerrainCache {
         }
     }
 
-    /** Main thread, outside the parallel phase: colours queued chunks until the budget is used up. */
-    void work(MinecraftServer server, long budgetNanos) {
+    /**
+     * Main thread, outside the parallel phase: colours the queued chunks of dimensions that tick on the main thread (the
+     * others are done by their own dimension thread, {@link #workLevel}) until the budget is used up.
+     */
+    void work(MinecraftServer server, long budgetNanos, java.util.function.Predicate<ServerLevel> ownThread) {
         if (this.pending.isEmpty()) return;
         long end = System.nanoTime() + budgetNanos;
-        Iterator<Map.Entry<String, LinkedHashSet<Long>>> dims = this.pending.entrySet().iterator();
-        while (dims.hasNext()) {
-            Map.Entry<String, LinkedHashSet<Long>> d = dims.next();
+        for (Map.Entry<String, LinkedHashSet<Long>> d : this.pending.entrySet()) {
             ServerLevel level = ThreadMap.levelById(server, d.getKey());
-            Iterator<Long> it = d.getValue().iterator();
-            while (it.hasNext()) {
-                if (System.nanoTime() > end) return;
-                long key = it.next();
-                it.remove();
-                if (level == null) continue;
-                LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
-                if (chunk == null) continue;
-                try {
-                    put(d.getKey(), key, colour(level, chunk), server.getTickCount());
-                } catch (RuntimeException ex) {
-                    MultiCore.LOGGER.debug("[MultiCore] map: could not colour chunk {} in {}", new ChunkPos(key), d.getKey(), ex);
-                }
+            if (level == null) {
+                d.getValue().clear();
+                continue;
             }
-            dims.remove();
+            if (ownThread.test(level)) continue;
+            if (!this.colourSome(level, d.getKey(), d.getValue(), end, server.getTickCount())) return;
         }
+    }
+
+    /**
+     * The thread ticking {@code level} (its dimension thread, right after the tick, while it owns the level): colours
+     * that dimension's queued chunks until the budget is used up. Moves this work off the main thread.
+     */
+    void workLevel(ServerLevel level, long budgetNanos) {
+        String dim = level.dimension().location().toString();
+        LinkedHashSet<Long> queue = this.pending.get(dim);
+        if (queue == null || queue.isEmpty()) return;
+        this.colourSome(level, dim, queue, System.nanoTime() + budgetNanos, level.getServer().getTickCount());
+    }
+
+    /** @return false if the time ran out */
+    private boolean colourSome(ServerLevel level, String dim, LinkedHashSet<Long> queue, long end, long tick) {
+        Iterator<Long> it = queue.iterator();
+        while (it.hasNext()) {
+            if (System.nanoTime() > end) return false;
+            long key = it.next();
+            it.remove();
+            LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
+            if (chunk == null) continue;
+            try {
+                put(dim, key, colour(level, chunk), tick);
+            } catch (RuntimeException ex) {
+                MultiCore.LOGGER.debug("[MultiCore] map: could not colour chunk {} in {}", new ChunkPos(key), dim, ex);
+            }
+        }
+        return true;
     }
 
     private void put(String dim, long key, byte[] rgb, long tick) {

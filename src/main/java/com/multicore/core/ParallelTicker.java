@@ -104,6 +104,14 @@ public final class ParallelTicker {
         }
     }
 
+    /** Dimensions ticked on a dimension thread in the last parallel phase. Written by the main thread. */
+    private volatile Set<ServerLevel> lastOnOwnThread = Set.of();
+
+    /** Did {@code level} tick on its own dimension thread last tick (as opposed to the main thread)? */
+    public boolean tickedOnOwnThread(ServerLevel level) {
+        return this.lastOnOwnThread.contains(level);
+    }
+
     public boolean isSerial(ServerLevel level) {
         String id = level.dimension().location().toString();
         return this.serialDimensions.contains(id) || AutoAdjust.get().isIdle(id);
@@ -160,6 +168,7 @@ public final class ParallelTicker {
         int tickCount = server.getTickCount();
 
         profiler.push("multicore_pre");
+        long t0 = System.nanoTime();
         for (ServerLevel level : levels) {
             if (tickCount % 20 == 0) {
                 access.multicore$synchronizeTime(level);
@@ -173,6 +182,7 @@ public final class ParallelTicker {
             (this.isSerial(level) ? serial : parallel).add(level);
         }
 
+        long t1 = System.nanoTime();
         profiler.popPush("multicore_parallel");
         // One parallel dimension still gets its thread when regions are on: only there can it be split (see RegionTicker).
         if (parallel.size() >= 2 || (parallel.size() == 1 && RegionTicker.enabled())) {
@@ -183,20 +193,32 @@ public final class ParallelTicker {
 
         profiler.popPush("multicore_serial");
         long serialStart = System.nanoTime();
+        long deferred = 0;
+        long d0 = System.nanoTime();
         SerialQueue.runAll();
+        deferred += System.nanoTime() - d0;
+        long serialLevels = 0;
         for (ServerLevel level : serial) {
             long start = System.nanoTime();
             LevelThread.tickLevel(level, hasTimeLeft);
             long took = System.nanoTime() - start;
             this.recordTickTime(access, level, tickCount, took);
             AutoAdjust.get().recordRegion(level.dimension().location().toString(), took / 1e6, level.players().size());
+            serialLevels += took;
+            d0 = System.nanoTime();
             SerialQueue.runAll();
+            deferred += System.nanoTime() - d0;
         }
+        long p0 = System.nanoTime();
         for (ServerLevel level : levels) {
             EventHooks.fireLevelTickPost(level, hasTimeLeft);
         }
+        long post = System.nanoTime() - p0;
+        d0 = System.nanoTime();
         SerialQueue.runAll();
+        deferred += System.nanoTime() - d0;
         Stats.lastSerialNanos = System.nanoTime() - serialStart;
+        Stats.recordMainThread(t1 - t0, serialStart - t1, deferred, serialLevels, post, server.getAverageTickTimeNanos());
         this.autoEndTick(server, tickCount);
         profiler.pop();
         return true;
@@ -205,6 +227,9 @@ public final class ParallelTicker {
     private void runParallel(MinecraftServer server, List<ServerLevel> parallel, List<ServerLevel> serial,
                              BooleanSupplier hasTimeLeft, Thread main, int tickCount) {
         LevelThread[] workers = this.workersFor(parallel, main, tickCount);
+        java.util.Set<ServerLevel> own = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        own.addAll(parallel);
+        this.lastOnOwnThread = own;
         Phase phase = new Phase(hasTimeLeft, main, workers);
         long start = System.nanoTime();
 
@@ -270,8 +295,9 @@ public final class ParallelTicker {
         MinecraftServerAccessor access = (MinecraftServerAccessor) server;
         AutoAdjust auto = AutoAdjust.get();
         for (LevelThread worker : workers) {
-            sum += worker.lastTickNanos;
-            work += Math.max(0, worker.lastTickNanos - worker.lastLockWaitNanos);
+            // A split dimension did more work than its tick took: add what its region threads did beside it.
+            sum += worker.lastTickNanos + worker.regionExtraNanos;
+            work += Math.max(0, worker.lastTickNanos - worker.lastLockWaitNanos) + worker.regionExtraNanos;
             ServerLevel[] levels = worker.levels();
             long[] nanos = worker.levelTickNanos;
             for (int i = 0; i < levels.length && i < nanos.length; i++) {
@@ -456,6 +482,7 @@ public final class ParallelTicker {
 
     /** Main thread only. */
     public void retireAll() {
+        this.lastOnOwnThread = Set.of();
         if (this.pool.isEmpty()) {
             return;
         }

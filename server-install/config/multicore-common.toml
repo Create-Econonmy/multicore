@@ -5,6 +5,13 @@
 	#Dimensions that always tick on the main server thread, after the parallel phase.
 	#Example: ["minecraft:the_end", "multiworld:shop"]
 	serialDimensions = []
+	#If a dimension thread throws a threading error (ConcurrentModificationException and similar),
+	#log it, switch MultiCore off for the rest of the session and keep the server running where possible.
+	fallbackToSerialOnError = true
+	#Log a warning with thread dumps when the parallel phase takes longer than this (milliseconds).
+	# Default: 10000
+	# Range: 500 ~ 600000
+	slowPhaseWarnMs = 10000
 	#At most this many dimension threads (0 = the CPU's logical cores minus 2, at least 2).
 	# Default: 0
 	# Range: 0 ~ 256
@@ -18,16 +25,10 @@
 	# Default: 10.0
 	# Range: 0.1 ~ 1000.0
 	threadTargetMs = 10.0
-	#Dimensions that always share one thread, one entry per thread.
+	#Dimensions that always share one thread, one entry per thread. Each entry gets that thread to itself (other
+	#dimensions are packed onto other threads), so a single dimension can be given its own thread.
 	#Example: ["minecraft:the_nether, minecraft:the_end, multiworld:hub"]
 	threadGroups = []
-	#If a dimension thread throws a threading error (ConcurrentModificationException and similar),
-	#log it, switch MultiCore off for the rest of the session and keep the server running where possible.
-	fallbackToSerialOnError = true
-	#Log a warning with thread dumps when the parallel phase takes longer than this (milliseconds).
-	# Default: 10000
-	# Range: 500 ~ 600000
-	slowPhaseWarnMs = 10000
 
 [compatibility]
 	#Code from mods that are not in threadSafeMods (their block entities, entities, block ticks
@@ -69,12 +70,7 @@
 	#50 ms = TPS under 20.
 	# Default: 50.0
 	# Range: 0.0 ~ 1000.0
-	loadMs = 50.0
-	#Auto-adjust only acts after the server has been overloaded this long in a row (seconds,
-	#checked every 5 seconds).
-	# Default: 30
-	# Range: 5 ~ 3600
-	loadSeconds = 30
+	loadMs = 10.0
 	#Under load, parallel ticking must be at least this many times faster than one thread.
 	#1.0 never falls back.
 	# Default: 1.05
@@ -84,3 +80,58 @@
 	# Default: 10
 	# Range: 1 ~ 60
 	retryMinutes = 10
+	#Auto-adjust only acts after the server has been overloaded this long in a row (seconds,
+	#checked every 5 seconds).
+	# Default: 30
+	# Range: 5 ~ 3600
+	loadSeconds = 30
+
+[regions]
+	#Region threading: one busy dimension ticked by several threads at once (like Folia).
+	#Every tick, the entities and the block entities of a dimension are grouped into regions: squares of regionSizeChunks
+	#that have something in them, joined with the squares around them. Regions are at least one empty square apart
+	#(128 blocks with the default 8), so players far apart in the same world get their own thread.
+	#Spawning, removing and moving entities, scheduled block ticks and chunk tickets from a region thread are applied
+	#by the dimension thread right after, in order. Only works on dimensions that tick on a dimension thread.
+	enabled = true
+	#Size of a square in chunks (rounded down to 2, 4, 8, 16, 32...). Regions are one square apart at least.
+	# Default: 8
+	# Range: 2 ~ 64
+	regionSizeChunks = 8
+	#At most this many region threads per dimension (0 = the CPU's logical cores minus 2, between 2 and 8).
+	# Default: 0
+	# Range: 0 ~ 64
+	threadsPerDimension = 0
+	#Only split a dimension's entities when it has at least this many ticking.
+	# Default: 32
+	# Range: 0 ~ 1000000
+	minEntities = 32
+	#Only split a dimension's block entities when it has at least this many ticking.
+	# Default: 64
+	# Range: 0 ~ 1000000
+	minBlockEntities = 64
+	#Dimensions that are never split, e.g. ["minecraft:the_end"].
+	excludedDimensions = []
+	#Mod ids whose code may run on several region threads of the same dimension at once. Code of every other mod
+	#(even threadSafeMods) holds the mod lock on a region thread: a mod may keep state per dimension.
+	regionSafeMods = ["minecraft", "neoforge", "multicore"]
+	#Single event listeners that may run on several region threads of one dimension at once ("modid:EventName").
+	#The defaults only touch the entity they are given.
+	regionSafeListeners = ["create:EntityTickEvent$Pre", "create:LivingBreatheEvent", "citadel:EntityTickEvent$Post"]
+
+[map]
+	#A flat (2D) web map of every world: which dimension thread runs it, which chunks are loaded and ticking,
+	#forced chunks, players and the world border. Only answers addresses in allowedNetworks.
+	enabled = true
+	#Address the map listens on (0.0.0.0 = every network card of the server). Needs a restart.
+	bind = "0.0.0.0"
+	#Port of the map: open http://<server address>:<port>/ in a browser. Needs a restart.
+	# Default: 18200
+	# Range: 1 ~ 65535
+	port = 18200
+	#Who may open the map, as address/prefix-length. Everyone else is disconnected without an answer.
+	#The default is loopback and the private (home/office network) ranges, so it never works from the internet.
+	allowedNetworks = ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10"]
+	#Draw the ground under the chunks (top block colours, like a vanilla map). Read from loaded chunks only,
+	#a few each tick on the main thread (about 1 ms at most), and kept in multicore-map/ between restarts.
+	terrain = true

@@ -33,6 +33,11 @@ public class LevelThread extends Thread {
     /** Block entities collected for a region split during Level.tickBlockEntities (see {@link RegionTicker}). */
     java.util.List<Object> collectedBlockEntities;
     net.minecraft.world.level.Level collectingFor;
+    /**
+     * Work its region threads did during this thread's last tick beyond the tick's own time (their busy time minus
+     * mod-lock waits, minus the time the split took): a split dimension's tick is shorter than the work in it.
+     */
+    long regionExtraNanos;
     /** The dimension this thread is splitting right now (see {@link RegionTicker}); its tasks only run under the split's write lock. */
     volatile ServerLevel splitLevel;
 
@@ -126,11 +131,13 @@ public class LevelThread extends Thread {
         try {
             long start = System.nanoTime();
             this.lockWaitNanos = 0;
+            this.regionExtraNanos = 0;
             ServerLevel[] mine = this.levels;
             for (int i = 0; i < mine.length; i++) {
                 long t0 = System.nanoTime();
                 try {
                     tickLevel(mine[i], phase.hasTimeLeft());
+                    com.multicore.map.ThreadMap.afterLevelTick(mine[i]);
                 } catch (Throwable t) {
                     phase.fail(mine[i], t);
                 }

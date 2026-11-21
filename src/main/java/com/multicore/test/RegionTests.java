@@ -366,4 +366,49 @@ public final class RegionTests {
             cleanUp(level, all, new int[][] {{ax, z}, {bx, z}});
         });
     }
+
+    /**
+     * Auto-adjust compares the work of a parallel tick (what one thread would have to do) with its wall time. A split
+     * dimension's tick is shorter than the work in it, so the region threads' share must be counted: two groups of 24
+     * pigs, each pig 0.4 ms of work (19 ms in all), split over two region threads, must still count as about 19 ms of
+     * work while the phase itself takes much less.
+     */
+    @GameTest(template = "empty", batch = "regions_work", timeoutTicks = 600)
+    public static void regionWorkCountsForAutoAdjust(GameTestHelper helper) {
+        listen();
+        ServerLevel level = helper.getLevel();
+        BlockPos o = helper.absolutePos(BlockPos.ZERO);
+        int ax = o.getX() + 31000, bx = o.getX() - 31000, z = o.getZ() + 9000;
+        List<Pig> a = pigs(level, ax, z, 24);
+        List<Pig> b = pigs(level, bx, z, 24);
+        List<Pig> all = new ArrayList<>(a);
+        all.addAll(b);
+        for (Pig p : all) ACTIONS.put(p.getUUID(), e -> busy(400_000L));
+        AtomicInteger good = new AtomicInteger();
+        AtomicReference<String> last = new AtomicReference<>("");
+        helper.onEachTick(() -> {
+            long sum = com.multicore.core.Stats.lastSumOfLevelsNanos;
+            long phase = com.multicore.core.Stats.lastPhaseNanos();
+            last.set(String.format(java.util.Locale.ROOT, "work %.1f ms, phase %.1f ms", sum / 1e6, phase / 1e6));
+            if (sum > 16_000_000L && phase < sum * 0.8) good.incrementAndGet();
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(good.get() >= 10, "the split's work is not counted (" + good.get() + " good ticks; last: " + last.get() + ")");
+            assertRegionsStillOn(helper);
+            cleanUp(level, all, new int[][] {{ax, z}, {bx, z}});
+        });
+    }
+
+    /** /multicore regions off|on switches region threads at once, without touching the dimension threads. */
+    @GameTest(template = "empty", batch = "regions_command", timeoutTicks = 100)
+    public static void regionsCommandSwitchesRegionThreads(GameTestHelper helper) {
+        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
+        net.minecraft.commands.CommandSourceStack console = server.createCommandSourceStack().withPermission(4).withSuppressedOutput();
+        server.getCommands().performPrefixedCommand(console, "multicore regions off");
+        boolean offWorked = !RegionTicker.enabled() && ParallelTicker.get().isActive();
+        server.getCommands().performPrefixedCommand(console, "multicore regions on");
+        helper.assertTrue(offWorked, "/multicore regions off did not switch region threads off (or switched MultiCore off)");
+        helper.assertTrue(RegionTicker.enabled(), "/multicore regions on did not switch them back on");
+        helper.succeed();
+    }
 }

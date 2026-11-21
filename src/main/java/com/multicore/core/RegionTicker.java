@@ -71,6 +71,14 @@ public final class RegionTicker {
         LAST_REGIONS.clear();
     }
 
+    /** /multicore regions on|off: until the next restart or config reload. Switching on also clears an error switch-off. */
+    public static void setEnabled(boolean on) {
+        enabled = on;
+        if (on) {
+            disabledReason = null;
+        }
+    }
+
     public static boolean enabled() {
         return enabled && disabledReason == null;
     }
@@ -198,6 +206,7 @@ public final class RegionTicker {
         @SuppressWarnings("unchecked")
         Split split = new Split(level, owner, plan, shift, (List<Object>) items, (Consumer<Object>) action, workers.length);
         Stats.REGION_SPLITS.increment();
+        long splitStart = System.nanoTime();
         for (RegionThread worker : workers) {
             worker.pending = split;
             LockSupport.unpark(worker);
@@ -208,6 +217,10 @@ public final class RegionTicker {
         } finally {
             owner.splitLevel = null;
         }
+        // The dimension's tick time already holds the split's wall time; what the region threads did beyond that is
+        // extra work a single thread would have had to do (see AutoAdjust's speedup).
+        long splitWall = System.nanoTime() - splitStart;
+        owner.regionExtraNanos += Math.max(0L, split.busyNanos.sum() - splitWall);
         split.applyDeferred();
         if (entities) LAST_REGIONS.put(dim, plan.regions);
         LAST.merge(dim, describe(what, plan.regions, plan.jobs.length, items.size()), RegionTicker::mergeDescription);
@@ -285,6 +298,8 @@ public final class RegionTicker {
         final AtomicInteger nextJob = new AtomicInteger();
         final AtomicInteger running;
         final AtomicInteger chunkWaiters = new AtomicInteger();
+        /** Time the region threads spent on jobs, minus their mod-lock waits. */
+        final java.util.concurrent.atomic.LongAdder busyNanos = new java.util.concurrent.atomic.LongAdder();
         @Nullable
         volatile Throwable error;
         /** Square key -> job owning it (-1: no job). */
@@ -308,6 +323,8 @@ public final class RegionTicker {
 
         /** On a region thread: take jobs until none are left. */
         void work(RegionThread self) {
+            long started = System.nanoTime();
+            long lockWaitBefore = self.lockWaitNanos;
             try {
                 int j;
                 while ((j = this.nextJob.getAndIncrement()) < this.plan.jobs.length) {
@@ -338,6 +355,7 @@ public final class RegionTicker {
             } catch (Throwable t) {
                 this.fail(t);
             } finally {
+                this.busyNanos.add(Math.max(0L, System.nanoTime() - started - (self.lockWaitNanos - lockWaitBefore)));
                 if (this.running.decrementAndGet() == 0) {
                     LockSupport.unpark(this.coordinator);
                 }

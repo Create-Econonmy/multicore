@@ -109,6 +109,14 @@ packed by a packager (with a stock link) on a chest in another region, and a tra
 own assembly drives 600 blocks along a track to a station in another region. Tests that need the pack's mods (Create,
 Hub Essentials, Create Economy Money) pass at once when those mods are not installed (the light test pack).
 
+Auto-adjust counts what region threads do: a split dimension's tick is shorter than the work in it, so each split adds
+its region threads' busy time (minus mod-lock waits) beyond the split's own time to the "one thread" estimate.
+
+The main thread keeps only what has to happen one at a time: level-tick events, deferred cross-dimension work and
+commands, dimensions auto-adjust moved there, and vanilla's own main-thread work (player packets and movement,
+mods' server-tick events). The map's terrain colouring runs on each dimension's own thread. `/multicore status`
+shows the main thread's time per tick, part by part.
+
 A dimension that is the only one on a dimension thread still gets that thread when regions are on, because only there
 can it be split. `/multicore status` shows the last split per dimension ("entities: 812 in 3 regions on 3 threads").
 
@@ -120,6 +128,7 @@ across regions; Create and other mods outside `regionSafeMods` take turns on the
 - `/multicore` or `/multicore status`: mode, parallel tick time vs. single-thread time, per-dimension tick times, lock and cross-dimension counters.
 - `/multicore off` / `/multicore on`: switch to vanilla ticking and back, without a restart.
 - `/multicore auto off` / `/multicore auto on`: switch auto-adjust (below) until the next restart.
+- `/multicore regions off` / `/multicore regions on`: switch region threads only, until the next restart.
 - `/multicore locks` (`reset`): which mods hold the shared mod lock the most. These are the ones worth checking and
   adding to `threadSafeMods` / `threadSafeListeners`.
 

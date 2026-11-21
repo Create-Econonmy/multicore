@@ -1,4 +1,4 @@
-MULTICORE SERVER 0.1.0 - SERVER INSTALL KIT  (mod id: multicore)
+MULTICORE SERVER 0.3.0 - SERVER INSTALL KIT  (mod id: multicore)
 ================================================================================
 NOT installed on the server. Everything here is staged only.
 
@@ -9,11 +9,18 @@ not been checked as thread-safe (that includes Create Economy Money, Ranks and
 the Launcher) still runs one at a time behind a shared lock, so those mods
 work exactly as before.
 
+NEW IN 0.3.0: REGION THREADS. A busy world (South) is split further: its
+entities and block entities are grouped into regions at least 128 blocks
+apart, each on its own thread, so players far apart in the same world no
+longer wait for each other. /multicore regions off|on switches only that,
+instantly. Step-by-step instructions you can give to an AI assistant (with
+checkpoints where it must ask you first): INSTALL-FOR-AI-AGENT.md.
+
 Server-side only. Players do NOT need it, and it must NOT go in the modpack or
 the launcher's mirrorMods list.
 
 FILES
-  mods/multicore-0.1.0.jar        the mod
+  mods/multicore-0.3.0.jar        the mod
   config/multicore-common.toml    default config (created on first start anyway)
 
 TESTED WITH THE NEW MODS
@@ -24,7 +31,7 @@ TESTED WITH THE NEW MODS
   pickup) takes MultiCore's mod lock.
 
 INSTALL (server stopped; take a backup of the world first)
-1. Copy mods/multicore-0.1.0.jar into the server's mods/.
+1. Copy mods/multicore-0.3.0.jar into the server's mods/.
 2. Leave dimthread installed for the first start. While its gamerule
    dimthread_active is true (the default), MultiCore stands by and does
    nothing, so the first start is the same as today.
@@ -51,22 +58,34 @@ AUTO-ADJUST (on by default, config [autoAdjust] in multicore-common.toml)
     to an hour. So it can never stay slower than vanilla.
   /multicore status shows each world's thread, average cost and players, plus
   the last decision and why. /multicore auto off|on switches it until restart.
-  It does NOT split one world (South) into several threads; see README.
+  Region threads' work is counted too, so splitting South is judged correctly.
 
 TURNING IT OFF AGAIN (instant, no restart)
+  /multicore regions off               only region threads off
   /multicore off                       plain single-thread ticking
   or /gamerule dimthread_active true   back to dimthread
 If MultiCore detects a threading error it logs it and switches itself to
 single-thread ticking for the rest of the session (fallbackToSerialOnError).
 
 REMOVING IT
-  Stop the server and delete mods/multicore-0.1.0.jar. It stores nothing in
+  Stop the server and delete mods/multicore-0.3.0.jar. It stores nothing in
   the world.
 
 ONCE IT HAS RUN WELL FOR A FEW DAYS
   Remove dimthread from mods/ (its NeoForge port gives almost no parallelism
   and stops some mods, such as Open Parties and Claims, from doing work during
   world ticks).
+
+TEST NOTES (2026-11-20, 0.3.0, local test servers only)
+  Full pack (208 jars): 40/40 GameTests + 24 unit tests, brute-force test with
+  every block entity and entity split over region threads, no MultiCore-only
+  errors. Covered: Create logistics request across regions, a real Create train
+  driving between regions, Hub Essentials /tpa and /home, Create Economy /pay,
+  chests, blocks, death and respawn, riding between regions, cross-region
+  access (no lost or duplicated items), auto-adjust counting region work.
+  Found and fixed with the full pack: Lithium's world-border listener map
+  (a hang) and three Lithium per-world lists (turned off by MultiCore).
+  Not tested: a real game client; Multiworld (not available locally).
 
 TEST NOTES (2026-11-15, local test server only)
   Mod list: tools/server-mods-2026-11-15.txt = the server's 2026-09-30 list
@@ -103,4 +122,4 @@ TEST NOTES (2026-11-15, local test server only)
     (NoClassDefFoundError dan200/computercraft/...), MultiCore on or off.
     Electronic Warfare was left out of the test.
 
-jar sha256: 963f53936e193ac37a1f8d99560d3588dd2a7a605bfad9c1ca22100f146b8eb1
+jar sha256 (multicore-0.3.0.jar): ea349416fedceda344cf218c1f6b6195725991a92308cf865748f72003232635
