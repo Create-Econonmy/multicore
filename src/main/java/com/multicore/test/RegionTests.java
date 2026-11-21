@@ -290,4 +290,80 @@ public final class RegionTests {
             cleanUp(level, all, new int[][] {{ax, z}, {bx, z}});
         });
     }
+
+    /**
+     * Like a Create stock ticker or factory gauge pulling from a vault on the far side of the world: a pig in region A
+     * takes items out of a chest in region B every tick, while the 24 pigs of region B keep putting items into it at the
+     * same moment. The access from A must pause region B (see RegionTicker.crossRegion), so not one item is lost or
+     * made up.
+     */
+    @GameTest(template = "empty", batch = "regions_crossregion", timeoutTicks = 400)
+    public static void pullingFromAChestInAnotherRegionLosesNothing(GameTestHelper helper) {
+        listen();
+        ServerLevel level = helper.getLevel();
+        BlockPos o = helper.absolutePos(BlockPos.ZERO);
+        int ax = o.getX() + 11000, bx = o.getX() - 11000, z = o.getZ() - 4000;
+        List<Pig> a = pigs(level, ax, z, 24);
+        List<Pig> b = pigs(level, bx, z, 24);
+        BlockPos chestPos = new BlockPos(bx, 150, z + 8);
+        level.setBlock(chestPos, Blocks.CHEST.defaultBlockState(), 3);
+        AtomicInteger inserted = new AtomicInteger();
+        AtomicInteger pulled = new AtomicInteger();
+        AtomicInteger pullTicks = new AtomicInteger();
+        AtomicBoolean stop = new AtomicBoolean();
+        long pausesBefore = com.multicore.core.Stats.REGION_EXCLUSIVE.sum();
+
+        for (Pig p : b) {
+            ACTIONS.put(p.getUUID(), e -> {
+                if (stop.get() || !onRegionThread() || !(level.getBlockEntity(chestPos) instanceof ChestBlockEntity chest)) return;
+                for (int slot = 0; slot < chest.getContainerSize(); slot++) {
+                    ItemStack stack = chest.getItem(slot);
+                    if (stack.isEmpty()) {
+                        chest.setItem(slot, new ItemStack(Items.COBBLESTONE));
+                    } else if (stack.getCount() < stack.getMaxStackSize()) {
+                        stack.grow(1);
+                        chest.setChanged();
+                    } else {
+                        continue;
+                    }
+                    inserted.incrementAndGet();
+                    return;
+                }
+            });
+        }
+        ACTIONS.put(a.get(0).getUUID(), e -> {
+            if (stop.get() || !onRegionThread()) return;
+            if (pullTicks.incrementAndGet() >= 120) {
+                stop.set(true);
+            }
+            if (!(level.getBlockEntity(chestPos) instanceof ChestBlockEntity chest)) return; // another region: pauses region B
+            for (int n = 0; n < 24; n++) {
+                for (int slot = 0; slot < chest.getContainerSize(); slot++) {
+                    if (!chest.getItem(slot).isEmpty()) {
+                        chest.removeItem(slot, 1);
+                        pulled.incrementAndGet();
+                        break;
+                    }
+                }
+            }
+        });
+        List<Pig> all = new ArrayList<>(a);
+        all.addAll(b);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(stop.get(), "still running (" + pullTicks.get() + " ticks)");
+            int inChest = 0;
+            if (level.getBlockEntity(chestPos) instanceof ChestBlockEntity chest) {
+                for (int slot = 0; slot < chest.getContainerSize(); slot++) inChest += chest.getItem(slot).getCount();
+            }
+            helper.assertTrue(inserted.get() > 500, "only " + inserted.get() + " items were put in");
+            helper.assertTrue(pulled.get() > 100, "only " + pulled.get() + " items were taken out");
+            helper.assertTrue(inChest == inserted.get() - pulled.get(), "items lost or made up: put in " + inserted.get()
+                    + ", taken out " + pulled.get() + ", in the chest " + inChest);
+            long pauses = com.multicore.core.Stats.REGION_EXCLUSIVE.sum() - pausesBefore;
+            helper.assertTrue(pauses > 0, "the access from the other region never paused region B");
+            assertRegionsStillOn(helper);
+            level.removeBlock(chestPos, false);
+            cleanUp(level, all, new int[][] {{ax, z}, {bx, z}});
+        });
+    }
 }

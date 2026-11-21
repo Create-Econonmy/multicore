@@ -202,7 +202,12 @@ public final class RegionTicker {
             worker.pending = split;
             LockSupport.unpark(worker);
         }
-        split.coordinate();
+        owner.splitLevel = level;
+        try {
+            split.coordinate();
+        } finally {
+            owner.splitLevel = null;
+        }
         split.applyDeferred();
         if (entities) LAST_REGIONS.put(dim, plan.regions);
         LAST.merge(dim, describe(what, plan.regions, plan.jobs.length, items.size()), RegionTicker::mergeDescription);
@@ -282,6 +287,8 @@ public final class RegionTicker {
         final AtomicInteger chunkWaiters = new AtomicInteger();
         @Nullable
         volatile Throwable error;
+        /** Square key -> job owning it (-1: no job). */
+        final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap squareJob = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
 
         Split(ServerLevel level, LevelThread coordinator, RegionPlan plan, int shift, List<Object> items, Consumer<Object> action, int workers) {
             this.level = level;
@@ -293,6 +300,10 @@ public final class RegionTicker {
             this.deferred = new RegionThread.Deferred[plan.jobs.length];
             for (int i = 0; i < this.deferred.length; i++) this.deferred[i] = new RegionThread.Deferred();
             this.running = new AtomicInteger(workers);
+            this.squareJob.defaultReturnValue(-1);
+            for (int j = 0; j < plan.jobSquares.length; j++) {
+                for (long key : plan.jobSquares[j]) this.squareJob.put(key, j);
+            }
         }
 
         /** On a region thread: take jobs until none are left. */
@@ -315,6 +326,7 @@ public final class RegionTicker {
                                 this.fail(t);
                             } finally {
                                 this.rw.readLock().unlock();
+                                this.endExclusive(self);
                             }
                         }
                     } finally {
@@ -351,6 +363,8 @@ public final class RegionTicker {
                     this.reportSlow();
                 }
                 if (this.chunkWaiters.get() > 0) {
+                    // Lock order: the mod lock first, then the write lock (see crossRegion).
+                    ModLock.acquire(CHUNK_TASKS);
                     this.rw.writeLock().lock();
                     try {
                         int budget = 4096;
@@ -361,6 +375,7 @@ public final class RegionTicker {
                         MultiCore.LOGGER.error("[MultiCore] Error running a chunk task of {} for a region thread", this.level.dimension().location(), t);
                     } finally {
                         this.rw.writeLock().unlock();
+                        ModLock.release();
                     }
                     LockSupport.parkNanos(this, 20_000L);
                 } else if (!this.coordinator.pollOtherLevels(this.level)) {
@@ -401,9 +416,67 @@ public final class RegionTicker {
             for (int i = 0; i < holds; i++) {
                 this.rw.readLock().unlock();
             }
+            // An exclusive stretch ends here: the dimension thread needs the write lock to run the tasks waited for.
+            RegionThread self = RegionThread.current();
+            if (self != null && self.exclusive) {
+                self.exclusive = false;
+                while (this.rw.isWriteLockedByCurrentThread()) this.rw.writeLock().unlock();
+            }
             this.chunkWaiters.incrementAndGet();
             LockSupport.unpark(this.coordinator);
             return holds;
+        }
+
+        /**
+         * The current item touches another region's part of the world: pause every other region thread until the item
+         * is done. The mod lock is taken first (lock order), then the read lock is swapped for the write lock.
+         */
+        void beginExclusive(RegionThread self) {
+            if (self.exclusive) {
+                return;
+            }
+            if (!self.exclusiveModLock) {
+                ModLock.acquire(CROSS_REGION);
+                self.exclusiveModLock = true;
+            }
+            int holds = this.rw.getReadHoldCount();
+            for (int i = 0; i < holds; i++) {
+                this.rw.readLock().unlock();
+            }
+            boolean got = false;
+            try {
+                // Bounded: if something else this thread holds keeps a region thread from reaching a safe point, carry on
+                // without the pause rather than wait forever.
+                got = this.rw.writeLock().tryLock(EXCLUSIVE_WAIT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            for (int i = 0; i < holds; i++) {
+                this.rw.readLock().lock(); // a writer may also hold read locks; the item's own unlock stays balanced
+            }
+            if (got) {
+                self.exclusive = true;
+                Stats.REGION_EXCLUSIVE.increment();
+            } else {
+                Stats.REGION_EXCLUSIVE_TIMEOUTS.increment();
+                if (EXCLUSIVE_TIMEOUT_LOGGED.compareAndSet(false, true)) {
+                    MultiCore.LOGGER.warn("[MultiCore] {} could not pause the other region threads of {} within {} ms for a "
+                            + "cross-region access and went on without it. Please report this log.", self.getName(),
+                            this.level.dimension().location(), EXCLUSIVE_WAIT_MS, new Throwable("where it happened"));
+                }
+            }
+        }
+
+        /** End of an item: an exclusive stretch ends with it. */
+        void endExclusive(RegionThread self) {
+            if (self.exclusive) {
+                self.exclusive = false;
+                while (this.rw.isWriteLockedByCurrentThread()) this.rw.writeLock().unlock();
+            }
+            if (self.exclusiveModLock) {
+                self.exclusiveModLock = false;
+                ModLock.release();
+            }
         }
 
         void endWait(int holds) {
@@ -509,6 +582,46 @@ public final class RegionTicker {
                 return n;
             }
         };
+    }
+
+    private static final LockSource CHUNK_TASKS = LockSource.of("region split: chunk tasks for a region thread");
+    private static final LockSource CROSS_REGION = LockSource.of("region split: cross-region access");
+    private static final long EXCLUSIVE_WAIT_MS = 2_000L;
+    private static final java.util.concurrent.atomic.AtomicBoolean EXCLUSIVE_TIMEOUT_LOGGED = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /**
+     * Code on a region thread reads a block entity or changes a block in another region's part of the world (a Create
+     * stock ticker pulling from a vault far away, a long teleport...). The rest of the current entity or block entity
+     * tick runs with every other region thread paused, as if the dimension had a single thread.
+     */
+    public static void crossRegion(int blockX, int blockZ) {
+        RegionThread t = RegionThread.working();
+        if (t == null || t.exclusive || !t.isForeign(blockX >> 4, blockZ >> 4)) {
+            return;
+        }
+        t.split.beginExclusive(t);
+    }
+
+    /** For ModLock: a region thread about to block on the mod lock lets go of its read lock. Returns the holds or 0. */
+    static int releaseReadsForWait() {
+        RegionThread t = RegionThread.working();
+        if (t == null || t.exclusive) {
+            return 0;
+        }
+        ReentrantReadWriteLock rw = t.split.rw;
+        int holds = rw.getReadHoldCount();
+        for (int i = 0; i < holds; i++) {
+            rw.readLock().unlock();
+        }
+        return holds;
+    }
+
+    static void reacquireReads(int holds) {
+        if (holds <= 0) return;
+        RegionThread t = RegionThread.working();
+        if (t != null) {
+            for (int i = 0; i < holds; i++) t.split.rw.readLock().lock();
+        }
     }
 
     /** A region thread about to block: see {@link Split#beginWait}. Returns a token for {@link #endWait}, or -1. */

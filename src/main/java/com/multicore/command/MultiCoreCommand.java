@@ -127,9 +127,11 @@ public final class MultiCoreCommand {
         String regionsOff = com.multicore.core.RegionTicker.disabledReason();
         line(src, "Region threads: ", !com.multicore.core.RegionTicker.enabled()
                 ? (regionsOff != null ? "off (" + regionsOff + ")" : "off")
-                : String.format(Locale.ROOT, "on, squares of %d chunks, up to %d threads per dimension, %d splits, %d deferred changes",
+                : String.format(Locale.ROOT, "on, squares of %d chunks, up to %d threads per dimension, %d splits, %d deferred changes, "
+                                + "%d cross-region pauses (%d timed out)",
                         com.multicore.core.RegionTicker.squareChunks(), com.multicore.core.RegionTicker.threadsPerDimension(),
-                        Stats.REGION_SPLITS.sum(), Stats.REGION_DEFERRED.sum()), ChatFormatting.WHITE);
+                        Stats.REGION_SPLITS.sum(), Stats.REGION_DEFERRED.sum(), Stats.REGION_EXCLUSIVE.sum(),
+                        Stats.REGION_EXCLUSIVE_TIMEOUTS.sum()), ChatFormatting.WHITE);
         com.multicore.core.RegionTicker.lastSplits().forEach((dim, what) -> line(src, "  " + dim + ": ", what, ChatFormatting.WHITE));
         line(src, "Mod lock: ", String.format(Locale.ROOT, "%d acquisitions, %.1f ms total waiting",
                 Stats.MOD_LOCK_ACQUIRES.sum(), Stats.MOD_LOCK_WAIT_NANOS.sum() / 1e6), ChatFormatting.GRAY);

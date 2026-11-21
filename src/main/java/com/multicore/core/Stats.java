@@ -7,6 +7,8 @@ public final class Stats {
     public static final LongAdder DEFERRED = new LongAdder();
     public static final LongAdder REGION_SPLITS = new LongAdder();
     public static final LongAdder REGION_DEFERRED = new LongAdder();
+    public static final LongAdder REGION_EXCLUSIVE = new LongAdder();
+    public static final LongAdder REGION_EXCLUSIVE_TIMEOUTS = new LongAdder();
     public static final LongAdder CROSS_LEVEL_READS = new LongAdder();
     public static final LongAdder CROSS_LEVEL_LOADS = new LongAdder();
     public static final LongAdder MOD_LOCK_ACQUIRES = new LongAdder();

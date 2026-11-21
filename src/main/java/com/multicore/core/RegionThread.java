@@ -28,6 +28,10 @@ public final class RegionThread extends LevelThread {
     int job = -1;
     @Nullable
     Deferred deferred;
+    /** This thread holds its split's write lock: every other region thread is paused (see {@link RegionTicker#crossRegion}). */
+    boolean exclusive;
+    /** This thread took the mod lock once more for an exclusive stretch; released at the end of the item. */
+    boolean exclusiveModLock;
     /** This thread's copy of ServerLevel.isUpdatingNavigations. */
     public boolean updatingNavigations;
     private Level updaterLevel;
@@ -87,6 +91,16 @@ public final class RegionThread extends LevelThread {
             this.updaterLevel = level;
         }
         return this.updater;
+    }
+
+    /** Does the chunk lie in a square of another job (another region thread's part of the world)? */
+    public boolean isForeign(int chunkX, int chunkZ) {
+        RegionTicker.Split s = this.split;
+        if (s == null || this.job < 0) {
+            return false;
+        }
+        int owner = s.squareJob.get(RegionPlan.squareKey(chunkX >> s.shift, chunkZ >> s.shift));
+        return owner >= 0 && owner != this.job;
     }
 
     /** Does the chunk belong to the job this thread is running? */

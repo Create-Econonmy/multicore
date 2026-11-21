@@ -33,6 +33,8 @@ public class LevelThread extends Thread {
     /** Block entities collected for a region split during Level.tickBlockEntities (see {@link RegionTicker}). */
     java.util.List<Object> collectedBlockEntities;
     net.minecraft.world.level.Level collectingFor;
+    /** The dimension this thread is splitting right now (see {@link RegionTicker}); its tasks only run under the split's write lock. */
+    volatile ServerLevel splitLevel;
 
     /** For {@link RegionThread}. */
     protected LevelThread(String name, ServerLevel level, ClassLoader contextLoader) {
@@ -163,6 +165,9 @@ public class LevelThread extends Thread {
         }
         boolean worked = false;
         for (ServerLevel level : this.levels) {
+            if (level == this.splitLevel) {
+                continue;
+            }
             try {
                 worked |= level.getChunkSource().pollTask();
             } catch (Throwable t) {

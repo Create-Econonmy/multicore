@@ -94,6 +94,7 @@ with fewer than `minEntities` (32) entities or `minBlockEntities` (64) block ent
 | Chunks: reading | Loaded chunks are read directly (the chunk map is copy-on-write). |
 | Chunks: loading one | The region thread waits; its dimension thread pauses every region thread (a read-write lock: region threads hold the read side while ticking one entity or block entity) and runs the chunk tasks. |
 | Points of interest (villager beds, job sites), the raid list | Synchronized. |
+| Reaching into another region's part of the world (a Create stock ticker, factory gauge or packager using a vault far away, a long teleport) | Reading a block entity or changing a block in a square that belongs to another region thread pauses every other region thread until that entity or block entity tick is done, exactly like one thread. `/multicore status` counts these pauses. |
 | Mod code | Holds the mod lock unless the mod is in `regionSafeMods` (default: minecraft, neoforge, multicore). Being in `threadSafeMods` is not enough: a mod may keep state per dimension. Single listeners can be listed in `regionSafeListeners`. |
 | A threading error in a region thread anyway | Logged; region threading switches off for the session, dimension threads keep running. |
 
@@ -221,7 +222,9 @@ Small test (512 MB, only the jars in `run/gametest-light/mods`, e.g. the Create 
   of a dimension stay on its dimension thread.
 - Inside a split, an entity that moved into another section is found there by queries only after the split, and
   something spawned on a region thread joins the world right after the split (the same tick).
-- Something that reaches more than 128 blocks into another region in one tick (a very long teleport) still works but
-  races with that region's thread. Vanilla has nothing like that except ender pearls thrown that far.
+- Reaching into another region only pauses the others for block entity reads and block changes. Plain block reads and
+  entities of another region are not covered (vanilla only does that with ender pearls thrown over 128 blocks).
+- Lithium: MultiCore turns off three Lithium options that keep one shared set per world (inactive_navigations,
+  entity_movement_tracking, game_events.dispatch). Lithium's hopper speed-up goes with entity_movement_tracking.
 - Mods outside `threadSafeMods` share one lock, so most Create content in different dimensions still takes turns.
   Checking Create and adding it to `threadSafeMods` is the biggest remaining performance win.

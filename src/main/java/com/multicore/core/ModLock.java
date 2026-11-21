@@ -43,6 +43,10 @@ public final class ModLock {
             }
             if (!acquired) {
                 LevelThread self = TickThreads.currentLevelThread();
+                // Lock order is "mod lock, then a region split's write lock": whoever pauses the region threads holds the
+                // mod lock first. So a region thread lets go of its read lock while it waits here, and takes it back
+                // once it has the mod lock (nobody can hold the write lock then).
+                int reads = RegionTicker.releaseReadsForWait();
                 try {
                     while (!LOCK.tryLock(100, TimeUnit.MICROSECONDS)) {
                         if (self != null) {
@@ -52,6 +56,8 @@ public final class ModLock {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     LOCK.lock();
+                } finally {
+                    RegionTicker.reacquireReads(reads);
                 }
             }
             long waited = System.nanoTime() - start;

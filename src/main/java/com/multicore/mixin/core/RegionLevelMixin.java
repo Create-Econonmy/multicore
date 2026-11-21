@@ -39,6 +39,17 @@ public abstract class RegionLevelMixin {
         RegionTicker.flushBlockEntities((Level) (Object) this);
     }
 
+    @Inject(method = "getBlockEntity", at = @At("HEAD"))
+    private void multicore$crossRegionBlockEntity(net.minecraft.core.BlockPos pos, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<BlockEntity> cir) {
+        RegionTicker.crossRegion(pos.getX(), pos.getZ());
+    }
+
+    @Inject(method = "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;II)Z", at = @At("HEAD"))
+    private void multicore$crossRegionSetBlock(net.minecraft.core.BlockPos pos, net.minecraft.world.level.block.state.BlockState state,
+                                               int flags, int recursionLeft, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> cir) {
+        RegionTicker.crossRegion(pos.getX(), pos.getZ());
+    }
+
     @Inject(method = "addBlockEntityTicker", at = @At("HEAD"), cancellable = true)
     private void multicore$regionAddTicker(TickingBlockEntity ticker, CallbackInfo ci) {
         Level self = (Level) (Object) this;
