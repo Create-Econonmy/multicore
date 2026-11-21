@@ -92,32 +92,51 @@ public final class MultiCoreFuzzTests {
 
         BlockPos parallelBase = new BlockPos(4096, 150, 4096);
         BlockPos vanillaBase = new BlockPos(-8192, 150, 4096);
+        // A second copy 3000 blocks away: two regions per dimension, so every block entity and entity also runs split
+        // across region threads (see RegionTicker). The vanilla run gets the same layout.
+        BlockPos parallelBase2 = parallelBase.offset(3000, 0, 0);
+        BlockPos vanillaBase2 = vanillaBase.offset(-3000, 0, 0);
         AtomicInteger placed = new AtomicInteger();
 
         MultiCore.LOGGER.info("[MultiCore fuzz] BEGIN parallel (MultiCore on)");
         ParallelTicker.get().setEnabled(true);
         for (ServerLevel level : levels) {
-            LevelScheduler.run(level, () -> populate(level, parallelBase, blocks, types, placed));
+            LevelScheduler.run(level, () -> {
+                populate(level, parallelBase, blocks, types, placed);
+                populate(level, parallelBase2, blocks, types, placed);
+            });
         }
         helper.runAfterDelay(TICKS, () -> {
             String reason = ParallelTicker.get().disabledReason();
-            MultiCore.LOGGER.info("[MultiCore fuzz] END parallel: {} dimensions populated, MultiCore {}", placed.get(),
-                    reason == null ? "still running in parallel" : "FELL BACK TO VANILLA: " + reason);
+            String regionReason = com.multicore.core.RegionTicker.disabledReason();
+            MultiCore.LOGGER.info("[MultiCore fuzz] END parallel: {} areas populated, MultiCore {}, region threads {}, last splits {}", placed.get(),
+                    reason == null ? "still running in parallel" : "FELL BACK TO VANILLA: " + reason,
+                    regionReason == null ? "still on" : "SWITCHED OFF: " + regionReason, com.multicore.core.RegionTicker.lastSplits());
             for (ServerLevel level : levels) {
-                LevelScheduler.run(level, () -> clear(level, parallelBase));
+                LevelScheduler.run(level, () -> {
+                    clear(level, parallelBase);
+                    clear(level, parallelBase2);
+                });
             }
             helper.assertTrue(reason == null, "MultiCore fell back to vanilla ticking: " + reason);
+            helper.assertTrue(regionReason == null, "region threading switched itself off: " + regionReason);
             ParallelTicker.get().setEnabled(false);
             placed.set(0);
             MultiCore.LOGGER.info("[MultiCore fuzz] BEGIN vanilla (MultiCore off)");
             for (ServerLevel level : levels) {
-                LevelScheduler.run(level, () -> populate(level, vanillaBase, blocks, types, placed));
+                LevelScheduler.run(level, () -> {
+                    populate(level, vanillaBase, blocks, types, placed);
+                    populate(level, vanillaBase2, blocks, types, placed);
+                });
             }
         });
         helper.runAfterDelay(2L * TICKS + 20, () -> {
-            MultiCore.LOGGER.info("[MultiCore fuzz] END vanilla: {} dimensions populated", placed.get());
+            MultiCore.LOGGER.info("[MultiCore fuzz] END vanilla: {} areas populated", placed.get());
             for (ServerLevel level : levels) {
-                LevelScheduler.run(level, () -> clear(level, vanillaBase));
+                LevelScheduler.run(level, () -> {
+                    clear(level, vanillaBase);
+                    clear(level, vanillaBase2);
+                });
             }
             ParallelTicker.get().setEnabled(true);
             setConfig(NeoForgeConfig.SERVER.removeErroringBlockEntities, oldRemoveBlockEntities);

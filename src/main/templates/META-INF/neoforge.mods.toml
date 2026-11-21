@@ -27,3 +27,12 @@ type="required"
 versionRange="${minecraft_version_range}"
 ordering="NONE"
 side="BOTH"
+
+# Lithium options that keep one shared set per world, changed from entity and block entity ticks. With region threads
+# (several threads ticking one world) those sets would be changed by two threads at once, so MultiCore turns them off.
+# Lithium reads this table from every installed mod. Turning off entity_movement_tracking also turns off Lithium's hopper
+# optimisations (hoppers then tick like vanilla).
+["lithium:options"]
+"mixin.entity.inactive_navigations" = false
+"mixin.util.entity_movement_tracking" = false
+"mixin.world.game_events.dispatch" = false

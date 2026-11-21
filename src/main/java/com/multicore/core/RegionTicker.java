@@ -40,6 +40,7 @@ import net.minecraft.world.level.entity.EntityInLevelCallback;
  * storage and raids are synchronized. Mod code runs under the mod lock unless the mod is in regionSafeMods.
  */
 public final class RegionTicker {
+    private static final long SLOW_SPLIT_NANOS = 10_000_000_000L;
     private static volatile boolean enabled = true;
     private static volatile int shift = 3;
     private static volatile int threads = 0;
@@ -342,7 +343,13 @@ public final class RegionTicker {
          * every region thread paused) and keeps the other dimensions of this thread served.
          */
         void coordinate() {
+            long warnAt = System.nanoTime() + SLOW_SPLIT_NANOS;
+            boolean warned = false;
             while (this.running.get() > 0) {
+                if (!warned && System.nanoTime() > warnAt) {
+                    warned = true;
+                    this.reportSlow();
+                }
                 if (this.chunkWaiters.get() > 0) {
                     this.rw.writeLock().lock();
                     try {
@@ -359,6 +366,19 @@ public final class RegionTicker {
                 } else if (!this.coordinator.pollOtherLevels(this.level)) {
                     LockSupport.parkNanos(this, 100_000L);
                 }
+            }
+        }
+
+        /** A split that takes this long is stuck or nearly so: log what every region thread is doing. */
+        private void reportSlow() {
+            MultiCore.LOGGER.warn("[MultiCore] A region split of {} is taking over {} s ({} of {} region threads still running). Thread dumps follow.",
+                    this.level.dimension().location(), SLOW_SPLIT_NANOS / 1_000_000_000L, this.running.get(), this.plan.jobs.length);
+            for (RegionThread worker : this.coordinator.regionWorkers) {
+                StringBuilder sb = new StringBuilder();
+                for (StackTraceElement e : worker.getStackTrace()) {
+                    sb.append("\n\tat ").append(e);
+                }
+                MultiCore.LOGGER.warn("[MultiCore] {} ({}):{}", worker.getName(), worker.getState(), sb);
             }
         }
 

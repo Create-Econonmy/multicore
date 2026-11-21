@@ -226,10 +226,11 @@ public final class RegionTests {
         List<BlockPos> placed = new ArrayList<>();
         for (int[] area : areas) {
             forceArea(level, area[0], area[1], true);
-            // 40 idle hoppers (enough block entities to split) and a 5-hopper chain into a chest.
+            // 40 mob spawners (enough block entities to split; unlike idle hoppers, Lithium never puts them to sleep, and
+            // with no player near they spawn nothing) and a 5-hopper chain into a chest.
             for (int i = 0; i < 40; i++) {
                 BlockPos p = new BlockPos(area[0] - 8 + (i % 8), 150, area[1] - 8 + (i / 8));
-                level.setBlock(p, Blocks.HOPPER.defaultBlockState(), 3);
+                level.setBlock(p, Blocks.SPAWNER.defaultBlockState(), 3);
                 placed.add(p);
             }
             BlockPos start = new BlockPos(area[0], 152, area[1]);

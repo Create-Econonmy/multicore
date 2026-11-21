@@ -43,6 +43,7 @@
     "core.RegionRaidsMixin",
     "core.RegionSectionStorageMixin",
     "core.RegionServerLevelMixin",
+    "core.RegionWorldBorderMixin",
     "safety.BlockableEventLoopMixin",
     "safety.BlockCapturedDropsMixin",
     "safety.CommandsMixin",
