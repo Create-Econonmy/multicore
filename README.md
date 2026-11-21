@@ -104,6 +104,10 @@ player does with blocks, chests and menus is handled on the main thread too. Reg
 tick (menus syncing, advancements). `PlayerTests` checks this with simulated players logged in through the player list:
 Hub Essentials `/tpa` and `/home` and Create Economy `/pay` between two regions, a chest, breaking and placing blocks,
 dying in lava and respawning, and riding a minecart 300 blocks from one region into another.
+`CreateTests` runs real Create with region threads: a package request sent to a logistics network from one region is
+packed by a packager (with a stock link) on a chest in another region, and a train assembled at a station by Create's
+own assembly drives 600 blocks along a track to a station in another region. Tests that need the pack's mods (Create,
+Hub Essentials, Create Economy Money) pass at once when those mods are not installed (the light test pack).
 
 A dimension that is the only one on a dimension thread still gets that thread when regions are on, because only there
 can it be split. `/multicore status` shows the last split per dimension ("entities: 812 in 3 regions on 3 threads").
@@ -219,6 +223,7 @@ Small test (512 MB, only the jars in `run/gametest-light/mods`, e.g. the Create 
 
 ```bash
 ./gradlew runGameTestServer -PgametestDir=run/gametest-light -PgametestRam=512M
+./gradlew runGameTestServer -PskipFuzz      # full pack without the 2-minute brute-force test
 ```
 
 `server-install/` holds the jar, default config and INSTALL.txt for the real server.

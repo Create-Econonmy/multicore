@@ -53,6 +53,10 @@ neoForge {
             gameDirectory = project.file(project.findProperty('gametestDir') ?: 'run/gametest')
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
             jvmArgument "-Xmx${project.findProperty('gametestRam') ?: '6G'}"
+            // -PskipFuzz: leave out the brute-force test (2 minutes), for quicker runs of the other tests.
+            if (project.hasProperty('skipFuzz')) {
+                systemProperty 'multicore.skipFuzz', 'true'
+            }
         }
     }
 

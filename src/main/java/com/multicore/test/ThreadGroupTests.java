@@ -68,35 +68,55 @@ public final class ThreadGroupTests {
         });
     }
 
-    @GameTest(template = "empty", batch = "threadgroups_entity", timeoutTicks = 200)
+    @GameTest(template = "empty", batch = "threadgroups_entity", timeoutTicks = 1200)
     public static void dimensionsOnTheSameThreadReachEachOtherDirectly(GameTestHelper helper) {
         // Only the Nether and the End share a thread; the overworld keeps its own.
         ParallelTicker.get().configureGroups(new ThreadGroups.Settings(0, 1, 10.0), List.of("minecraft:the_nether, minecraft:the_end"));
-        restoreLater(helper, 200);
+        restoreLater(helper, 1200);
         ServerLevel nether = helper.getLevel().getServer().getLevel(Level.NETHER);
         ServerLevel end = helper.getLevel().getServer().getLevel(Level.END);
         nether.setChunkForced(0, 0, true);
         end.setChunkForced(0, 0, true);
         Pig pig = helper.spawn(EntityType.PIG, new BlockPos(2, 2, 2));
         UUID id = pig.getUUID();
+        long endStart = end.getGameTime();
         BlockPos mark = new BlockPos(3, 120, 3);
         AtomicReference<String> thread = new AtomicReference<>();
         AtomicReference<String> write = new AtomicReference<>("pending");
-        helper.runAfterDelay(20, () -> LevelScheduler.run(nether, () -> {
+        // The GameTest server ticks as fast as it can, so 20 ticks can be far less time than loading the End's chunk takes;
+        // a pig sent into a chunk that does not tick entities yet is not visible. Wait for the chunk, not for ticks.
+        java.util.concurrent.atomic.AtomicBoolean sent = new java.util.concurrent.atomic.AtomicBoolean();
+        helper.onEachTick(() -> {
+            if (sent.get() || !end.isPositionEntityTicking(new BlockPos(0, 100, 0)) || !nether.isPositionEntityTicking(BlockPos.ZERO)) {
+                return;
+            }
+            sent.set(true);
+            LevelScheduler.run(nether, () -> {
             thread.set(Thread.currentThread().getName());
             // The End is ticked by this same thread: writing to it is safe right away (no need to defer).
             boolean done = end.setBlock(mark, Blocks.GOLD_BLOCK.defaultBlockState(), 3) && end.getBlockState(mark).is(Blocks.GOLD_BLOCK);
             write.set(done ? "immediate" : "deferred");
             // The overworld is another thread's: moving its pig to the End is deferred and still happens.
             pig.changeDimension(new DimensionTransition(end, new Vec3(0.5, 100, 0.5), Vec3.ZERO, 0, 0, DimensionTransition.DO_NOTHING));
-        }));
+            });
+        });
         helper.succeedWhen(() -> {
             helper.assertTrue(thread.get() != null, "not run yet");
             helper.assertTrue(thread.get().contains("the_nether") && thread.get().contains("the_end") && thread.get().contains("+"),
                     "the nether ran on " + thread.get() + ", not on one thread with the End");
             helper.assertTrue("immediate".equals(write.get()), "a write to the End from its own thread was " + write.get());
             helper.assertTrue(pig.isRemoved(), "the pig is still in the overworld");
-            helper.assertTrue(end.getEntity(id) != null, "the pig did not arrive in the End");
+            if (end.getEntity(id) == null) {
+                StringBuilder where = new StringBuilder();
+                for (ServerLevel l : helper.getLevel().getServer().getAllLevels()) {
+                    Entity e = l.getEntity(id);
+                    if (e != null) where.append(l.dimension().location()).append(" at ").append(e.blockPosition()).append(e.isRemoved() ? " (removed)" : "").append("; ");
+                }
+                helper.fail("the pig did not arrive in the End (found: " + (where.length() == 0 ? "nowhere" : where)
+                        + " End chunk 0,0 loaded: " + end.hasChunk(0, 0) + ", forced: " + end.getForcedChunks().contains(net.minecraft.world.level.ChunkPos.asLong(0, 0))
+                        + ", entities ticking there: " + end.isPositionEntityTicking(new BlockPos(0, 100, 0))
+                        + ", End ticked " + (end.getGameTime() - endStart) + " times, groups " + ParallelTicker.get().groupDescription() + ")");
+            }
             end.setBlock(mark, Blocks.AIR.defaultBlockState(), 3);
             nether.setChunkForced(0, 0, false);
             end.setChunkForced(0, 0, false);

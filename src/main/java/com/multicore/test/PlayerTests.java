@@ -205,6 +205,13 @@ public final class PlayerTests {
         };
     }
 
+    /** These tests use the pack's own mods; without them (the light test pack) they pass at once. */
+    private static boolean missing(GameTestHelper helper, String modId) {
+        if (net.neoforged.fml.ModList.get().isLoaded(modId)) return false;
+        helper.succeed();
+        return true;
+    }
+
     private static void assertOnRegionThread(GameTestHelper helper, ServerPlayer p) {
         String thread = TICKED_ON.get(p.getUUID());
         helper.assertTrue(thread != null && thread.contains("region"),
@@ -232,6 +239,7 @@ public final class PlayerTests {
 
     @GameTest(template = "empty", batch = "players_tpa", timeoutTicks = 900)
     public static void tpaFromOneRegionToAnother(GameTestHelper helper) {
+        if (missing(helper, "hubessentials")) return;
         listen();
         ServerLevel level = helper.getLevel();
         BlockPos o = helper.absolutePos(BlockPos.ZERO);
@@ -270,6 +278,7 @@ public final class PlayerTests {
 
     @GameTest(template = "empty", batch = "players_home", timeoutTicks = 900)
     public static void homeSetInOneRegionUsedFromAnother(GameTestHelper helper) {
+        if (missing(helper, "hubessentials")) return;
         listen();
         ServerLevel level = helper.getLevel();
         BlockPos o = helper.absolutePos(BlockPos.ZERO);
@@ -334,6 +343,7 @@ public final class PlayerTests {
 
     @GameTest(template = "empty", batch = "players_pay", timeoutTicks = 400)
     public static void payBetweenPlayersInTwoRegions(GameTestHelper helper) {
+        if (missing(helper, "cemoney")) return;
         listen();
         ServerLevel level = helper.getLevel();
         BlockPos o = helper.absolutePos(BlockPos.ZERO);

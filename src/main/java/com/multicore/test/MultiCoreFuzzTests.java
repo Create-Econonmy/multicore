@@ -56,6 +56,10 @@ public final class MultiCoreFuzzTests {
 
     @GameTest(template = "empty", timeoutTicks = 2 * TICKS + 400, required = false, batch = "fuzz")
     public static void everyBlockEntityAndEntityInEveryDimension(GameTestHelper helper) {
+        if (Boolean.getBoolean("multicore.skipFuzz")) {
+            helper.succeed();
+            return;
+        }
         MinecraftServer server = helper.getLevel().getServer();
         List<ServerLevel> levels = new ArrayList<>();
         server.getAllLevels().forEach(levels::add);
