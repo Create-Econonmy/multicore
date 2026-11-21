@@ -98,6 +98,13 @@ with fewer than `minEntities` (32) entities or `minBlockEntities` (64) block ent
 | Mod code | Holds the mod lock unless the mod is in `regionSafeMods` (default: minecraft, neoforge, multicore). Being in `threadSafeMods` is not enough: a mod may keep state per dimension. Single listeners can be listed in `regionSafeListeners`. |
 | A threading error in a region thread anyway | Logged; region threading switches off for the session, dimension threads keep running. |
 
+Players: the part of a player's tick that moves it, checks lava, fire and damage and lets it die (`doTick`) runs from its
+network connection on the main thread, never on a region thread; commands (`/tpa`, `/home`, `/pay`...) and everything a
+player does with blocks, chests and menus is handled on the main thread too. Region threads run the rest of the player
+tick (menus syncing, advancements). `PlayerTests` checks this with simulated players logged in through the player list:
+Hub Essentials `/tpa` and `/home` and Create Economy `/pay` between two regions, a chest, breaking and placing blocks,
+dying in lava and respawning, and riding a minecart 300 blocks from one region into another.
+
 A dimension that is the only one on a dimension thread still gets that thread when regions are on, because only there
 can it be split. `/multicore status` shows the last split per dimension ("entities: 812 in 3 regions on 3 threads").
 
