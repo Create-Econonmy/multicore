@@ -28,6 +28,8 @@ public final class ContentPolicy {
     private static volatile Set<String> safeListeners = Set.of();
     /** Mods whose block entities, entities and blocks (not their event listeners) may run in parallel. */
     private static volatile Set<String> safeContent = Set.of();
+    /** Every mod's content and listeners count as thread-safe (lockedContent still applies). */
+    private static volatile boolean unlockAll;
     private static volatile Set<String> regionSafeContent = Set.of();
     /** Ids (globs like "create:*track*") that hold the lock even when their mod's content is thread-safe. */
     private static volatile java.util.List<java.util.regex.Pattern> lockedContent = java.util.List.of();
@@ -59,8 +61,9 @@ public final class ContentPolicy {
      * Mods whose block entities, entities and blocks may run in parallel while their event listeners still hold the mod
      * lock (unless listed in threadSafeListeners), and the ids that stay locked anyway ("create:*track*").
      */
-    public static void configureContent(Collection<? extends String> safeContentMods, Collection<? extends String> locked) {
+    public static void configureContent(Collection<? extends String> safeContentMods, Collection<? extends String> locked, boolean unlockEverything) {
         safeContent = Set.copyOf(safeContentMods);
+        unlockAll = unlockEverything;
         java.util.List<java.util.regex.Pattern> patterns = new java.util.ArrayList<>();
         for (String glob : locked) {
             StringBuilder regex = new StringBuilder();
@@ -77,7 +80,7 @@ public final class ContentPolicy {
 
     private static boolean contentSafe(ResourceLocation id) {
         String namespace = id.getNamespace();
-        if (!safeNamespaces.contains(namespace) && !safeContent.contains(namespace)) {
+        if (!unlockAll && !safeNamespaces.contains(namespace) && !safeContent.contains(namespace)) {
             return false;
         }
         String full = id.toString();
@@ -90,7 +93,7 @@ public final class ContentPolicy {
     }
 
     private static boolean regionContentSafe(ResourceLocation id) {
-        return regionSafeNamespaces.contains(id.getNamespace()) || regionSafeContent.contains(id.getNamespace());
+        return unlockAll || regionSafeNamespaces.contains(id.getNamespace()) || regionSafeContent.contains(id.getNamespace());
     }
 
     private static boolean onRegionThread() {
@@ -116,18 +119,22 @@ public final class ContentPolicy {
 
     /** A mod's listeners for one event, listed as "modid:EventName" (nested events as "EntityTickEvent$Pre"). */
     public static boolean isSafeListener(String modId, String eventName) {
-        return safeNamespaces.contains(modId) || safeListeners.contains(modId + ":" + eventName);
+        return unlockAll || safeNamespaces.contains(modId) || safeListeners.contains(modId + ":" + eventName);
     }
 
     /** {@link #isSafeListener} for region threads. */
     public static boolean isRegionSafeListener(String modId, String eventName) {
         return isSafeListener(modId, eventName)
-                && (regionSafeNamespaces.contains(modId) || regionSafeListeners.contains(modId + ":" + eventName));
+                && (unlockAll || regionSafeNamespaces.contains(modId) || regionSafeListeners.contains(modId + ":" + eventName));
     }
 
     /** Does a region thread have to look again (some thread-safe mods are not region-safe)? */
     public static boolean regionStricter() {
         return regionStricter;
+    }
+
+    public static boolean unlockAll() {
+        return unlockAll;
     }
 
     public static Set<String> safeContent() {

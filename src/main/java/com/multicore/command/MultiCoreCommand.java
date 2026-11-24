@@ -160,6 +160,9 @@ public final class MultiCoreCommand {
         line(src, "Cross-dimension: ", String.format(Locale.ROOT, "%d reads, %d chunk loads, %d deferred actions",
                 Stats.CROSS_LEVEL_READS.sum(), Stats.CROSS_LEVEL_LOADS.sum(), Stats.DEFERRED.sum()), ChatFormatting.GRAY);
         line(src, "Thread-safe mods: ", String.join(", ", ContentPolicy.safeNamespaces()), ChatFormatting.GRAY);
+        if (ContentPolicy.unlockAll()) {
+            line(src, "All mods unlocked: ", "every mod's machines and listeners run in parallel (except lockedContent)", ChatFormatting.YELLOW);
+        }
         if (!ContentPolicy.safeContent().isEmpty()) {
             line(src, "Thread-safe machines (not their listeners): ", String.join(", ", ContentPolicy.safeContent()), ChatFormatting.GRAY);
         }

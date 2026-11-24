@@ -143,6 +143,15 @@ Remove `"create"` from `threadSafeContent` (and `regionSafeContent`) to put all 
 `/multicore locks` shows what still takes the lock. `CreateTests.machinesInManyRegionsRunWithoutTheModLock` checks
 motors driving shafts and redstone links in four regions at once.
 
+## Unlock every mod
+
+`compatibility.unlockAllMods = true` makes every mod's block entities, entities, blocks and event listeners run in
+parallel without the mod lock, on dimension threads and on region threads (default off). Only `lockedContent` keeps the
+lock (add `"modid:*"` to keep a whole mod under it), plus the locks MultiCore itself adds for mods that need them: Sable's
+native physics, KubeJS scripts, Create's shared managers and the per-thread flags of Open Parties and Claims and Steam 'n'
+Rails. This setting has not been tested with the whole pack: a mod that keeps global state without knowing about threads
+can corrupt it. `/multicore status` shows when it is on; switch it off to go back to the per-mod lists.
+
 ## Commands (op level 3)
 
 - `/multicore` or `/multicore status`: mode, parallel tick time vs. single-thread time, per-dimension tick times, lock and cross-dimension counters.

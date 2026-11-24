@@ -77,7 +77,8 @@ public final class MultiCore {
                 gameTests ? java.util.List.of() : MultiCoreConfig.THREAD_GROUPS.get());
         ContentPolicy.configure(MultiCoreConfig.SERIALIZE_UNSAFE_MODS.get(), MultiCoreConfig.THREAD_SAFE_MODS.get(),
                 MultiCoreConfig.THREAD_SAFE_LISTENERS.get());
-        ContentPolicy.configureContent(MultiCoreConfig.THREAD_SAFE_CONTENT.get(), MultiCoreConfig.LOCKED_CONTENT.get());
+        ContentPolicy.configureContent(MultiCoreConfig.THREAD_SAFE_CONTENT.get(), MultiCoreConfig.LOCKED_CONTENT.get(),
+                MultiCoreConfig.UNLOCK_ALL_MODS.get());
         ContentPolicy.configureRegions(MultiCoreConfig.REGION_SAFE_MODS.get(), MultiCoreConfig.REGION_SAFE_LISTENERS.get(),
                 MultiCoreConfig.REGION_SAFE_CONTENT.get());
         com.multicore.core.RegionTicker.configure(MultiCoreConfig.REGIONS_ENABLED.get(), MultiCoreConfig.REGION_SIZE_CHUNKS.get(),

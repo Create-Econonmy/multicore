@@ -40,6 +40,7 @@ public final class MultiCoreConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REGION_SAFE_CONTENT;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> THREAD_SAFE_CONTENT;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> LOCKED_CONTENT;
+    public static final ModConfigSpec.BooleanValue UNLOCK_ALL_MODS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REGION_SAFE_LISTENERS;
     public static final ModConfigSpec.BooleanValue MAP_ENABLED;
     public static final ModConfigSpec.ConfigValue<String> MAP_BIND;
@@ -121,6 +122,14 @@ public final class MultiCoreConfig {
                         "Mod ids whose content may run on several dimension threads at once.",
                         "Only add a mod after checking it keeps no shared state between dimensions.")
                 .defineListAllowEmpty("threadSafeMods", List.of("minecraft", "neoforge", "multicore"), () -> "", o -> o instanceof String);
+        UNLOCK_ALL_MODS = b.comment(
+                        "Treat every mod as thread-safe: the machines (block entities, entities, blocks) AND the event listeners of all",
+                        "mods run in parallel on dimension threads and region threads, without the mod lock. Content in lockedContent",
+                        "still holds the lock, and the locks MultiCore adds for mods that need them (Sable's physics engine, KubeJS,",
+                        "Create's shared managers, per-thread flags) stay in place. Fastest, but any mod that keeps global state without",
+                        "knowing about threads can corrupt it; not tested with the whole pack. Switch it off again if anything odd shows up.",
+                        "Add a mod's content to lockedContent (\"modid:*\") to keep just that mod under the lock.")
+                .define("unlockAllMods", false);
         THREAD_SAFE_CONTENT = b.comment(
                         "Mod ids whose block entities, entities and blocks may run on several dimension threads at once, while the",
                         "mod's event listeners still hold the mod lock (unless listed in threadSafeListeners). Content listed in",
