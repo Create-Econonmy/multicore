@@ -144,6 +144,9 @@ public final class MultiCoreCommand {
                         Stats.REGION_SPLITS.sum(), Stats.REGION_DEFERRED.sum(), Stats.REGION_EXCLUSIVE.sum(),
                         Stats.REGION_EXCLUSIVE_TIMEOUTS.sum()), ChatFormatting.WHITE);
         com.multicore.core.RegionTicker.lastSplits().forEach((dim, what) -> line(src, "  " + dim + ": ", what, ChatFormatting.WHITE));
+        if (com.multicore.core.RegionGovernor.enabled() && com.multicore.core.RegionTicker.enabled()) {
+            com.multicore.core.RegionGovernor.describe().forEach((k, what) -> line(src, "  only when faster, " + k + ": ", what, ChatFormatting.WHITE));
+        }
         // Everything else in the server's tick (player packets and movement, commands, mods' server-tick work, autosave)
         // is vanilla's main-thread work: what is left of the tick after the parts MultiCore measures.
         double measured = Stats.avgPreMs + Stats.avgWaitMs + Stats.avgDeferredMs + Stats.avgSerialLevelsMs + Stats.avgPostMs;
@@ -157,6 +160,9 @@ public final class MultiCoreCommand {
         line(src, "Cross-dimension: ", String.format(Locale.ROOT, "%d reads, %d chunk loads, %d deferred actions",
                 Stats.CROSS_LEVEL_READS.sum(), Stats.CROSS_LEVEL_LOADS.sum(), Stats.DEFERRED.sum()), ChatFormatting.GRAY);
         line(src, "Thread-safe mods: ", String.join(", ", ContentPolicy.safeNamespaces()), ChatFormatting.GRAY);
+        if (!ContentPolicy.safeContent().isEmpty()) {
+            line(src, "Thread-safe machines (not their listeners): ", String.join(", ", ContentPolicy.safeContent()), ChatFormatting.GRAY);
+        }
         return 1;
     }
 

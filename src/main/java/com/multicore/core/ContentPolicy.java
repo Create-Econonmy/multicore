@@ -26,6 +26,11 @@ public final class ContentPolicy {
     }
 
     private static volatile Set<String> safeListeners = Set.of();
+    /** Mods whose block entities, entities and blocks (not their event listeners) may run in parallel. */
+    private static volatile Set<String> safeContent = Set.of();
+    private static volatile Set<String> regionSafeContent = Set.of();
+    /** Ids (globs like "create:*track*") that hold the lock even when their mod's content is thread-safe. */
+    private static volatile java.util.List<java.util.regex.Pattern> lockedContent = java.util.List.of();
     private static volatile Set<String> regionSafeNamespaces = Set.of("minecraft", "neoforge", "multicore");
     private static volatile Set<String> regionSafeListeners = Set.of();
     /** Some thread-safe mods are not region-safe: region threads must look again. */
@@ -36,11 +41,56 @@ public final class ContentPolicy {
      * Mods (and single listeners) whose code may run on several region threads of the same dimension at once. Being
      * safe on different dimensions (threadSafeMods) is not enough: a mod may keep state per dimension.
      */
-    public static void configureRegions(Collection<? extends String> safeMods, Collection<? extends String> listeners) {
+    public static void configureRegions(Collection<? extends String> safeMods, Collection<? extends String> listeners,
+                                        Collection<? extends String> content) {
         regionSafeNamespaces = Set.copyOf(safeMods);
         regionSafeListeners = Set.copyOf(listeners);
-        regionStricter = !regionSafeNamespaces.containsAll(safeNamespaces) || !regionSafeListeners.containsAll(safeListeners);
+        regionSafeContent = Set.copyOf(content);
+        regionStricter = computeRegionStricter();
         generation++;
+    }
+
+    private static boolean computeRegionStricter() {
+        return !regionSafeNamespaces.containsAll(safeNamespaces) || !regionSafeListeners.containsAll(safeListeners)
+                || !regionSafeContent.containsAll(safeContent);
+    }
+
+    /**
+     * Mods whose block entities, entities and blocks may run in parallel while their event listeners still hold the mod
+     * lock (unless listed in threadSafeListeners), and the ids that stay locked anyway ("create:*track*").
+     */
+    public static void configureContent(Collection<? extends String> safeContentMods, Collection<? extends String> locked) {
+        safeContent = Set.copyOf(safeContentMods);
+        java.util.List<java.util.regex.Pattern> patterns = new java.util.ArrayList<>();
+        for (String glob : locked) {
+            StringBuilder regex = new StringBuilder();
+            for (String part : glob.split("\\*", -1)) {
+                if (regex.length() > 0) regex.append(".*");
+                regex.append(java.util.regex.Pattern.quote(part));
+            }
+            patterns.add(java.util.regex.Pattern.compile(regex.toString()));
+        }
+        lockedContent = java.util.List.copyOf(patterns);
+        regionStricter = computeRegionStricter();
+        generation++;
+    }
+
+    private static boolean contentSafe(ResourceLocation id) {
+        String namespace = id.getNamespace();
+        if (!safeNamespaces.contains(namespace) && !safeContent.contains(namespace)) {
+            return false;
+        }
+        String full = id.toString();
+        for (java.util.regex.Pattern pattern : lockedContent) {
+            if (pattern.matcher(full).matches()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean regionContentSafe(ResourceLocation id) {
+        return regionSafeNamespaces.contains(id.getNamespace()) || regionSafeContent.contains(id.getNamespace());
     }
 
     private static boolean onRegionThread() {
@@ -51,7 +101,7 @@ public final class ContentPolicy {
         serializeUnsafe = serialize;
         safeNamespaces = Set.copyOf(safeMods);
         safeListeners = Set.copyOf(listeners);
-        regionStricter = !regionSafeNamespaces.containsAll(safeNamespaces) || !regionSafeListeners.containsAll(safeListeners);
+        regionStricter = computeRegionStricter();
         generation++;
     }
 
@@ -78,6 +128,10 @@ public final class ContentPolicy {
     /** Does a region thread have to look again (some thread-safe mods are not region-safe)? */
     public static boolean regionStricter() {
         return regionStricter;
+    }
+
+    public static Set<String> safeContent() {
+        return safeContent;
     }
 
     public static Set<String> safeNamespaces() {
@@ -111,13 +165,13 @@ public final class ContentPolicy {
     private static LockSource source(PolicyHolder holder, String kind, @Nullable ResourceLocation id) {
         int gen = generation;
         if (holder.multicore$policyStamp() != gen) {
-            boolean unsafe = id == null || !safeNamespaces.contains(id.getNamespace());
+            boolean unsafe = id == null || !contentSafe(id);
             // Source first, stamp second: a thread that sees the new stamp also sees the new source.
             holder.multicore$setLockSource(unsafe ? LockSource.of(kind + id) : null);
             holder.multicore$setPolicyStamp(gen);
         }
         LockSource source = holder.multicore$lockSource();
-        if (source == null && regionStricter && id != null && onRegionThread() && !regionSafeNamespaces.contains(id.getNamespace())) {
+        if (source == null && regionStricter && id != null && onRegionThread() && !regionContentSafe(id)) {
             String name = kind + id + " (region)";
             return REGION_SOURCES.computeIfAbsent(name, LockSource::of);
         }

@@ -77,10 +77,15 @@ public final class MultiCore {
                 gameTests ? java.util.List.of() : MultiCoreConfig.THREAD_GROUPS.get());
         ContentPolicy.configure(MultiCoreConfig.SERIALIZE_UNSAFE_MODS.get(), MultiCoreConfig.THREAD_SAFE_MODS.get(),
                 MultiCoreConfig.THREAD_SAFE_LISTENERS.get());
-        ContentPolicy.configureRegions(MultiCoreConfig.REGION_SAFE_MODS.get(), MultiCoreConfig.REGION_SAFE_LISTENERS.get());
+        ContentPolicy.configureContent(MultiCoreConfig.THREAD_SAFE_CONTENT.get(), MultiCoreConfig.LOCKED_CONTENT.get());
+        ContentPolicy.configureRegions(MultiCoreConfig.REGION_SAFE_MODS.get(), MultiCoreConfig.REGION_SAFE_LISTENERS.get(),
+                MultiCoreConfig.REGION_SAFE_CONTENT.get());
         com.multicore.core.RegionTicker.configure(MultiCoreConfig.REGIONS_ENABLED.get(), MultiCoreConfig.REGION_SIZE_CHUNKS.get(),
                 MultiCoreConfig.REGION_THREADS.get(), MultiCoreConfig.REGION_MIN_ENTITIES.get(),
                 MultiCoreConfig.REGION_MIN_BLOCK_ENTITIES.get(), MultiCoreConfig.REGION_EXCLUDED_DIMENSIONS.get());
+        // GameTests check that splits happen on small test worlds, where one thread is often faster.
+        com.multicore.core.RegionGovernor.setEnabled(MultiCoreConfig.REGION_ONLY_WHEN_FASTER.get()
+                && System.getProperty("neoforge.enabledGameTestNamespaces") == null);
         CrossDimension.setDeferWrites(MultiCoreConfig.DEFER_CROSS_DIMENSION_WRITES.get());
         CrossLevel.setLogging(MultiCoreConfig.LOG_CROSS_DIMENSION_ACCESS.get());
         // The GameTest server keeps auto-adjust off: its tests check where each dimension ticks. Its own tests turn it on.

@@ -74,6 +74,7 @@ public final class RegionTicker {
     /** /multicore regions on|off: until the next restart or config reload. Switching on also clears an error switch-off. */
     public static void setEnabled(boolean on) {
         enabled = on;
+        RegionGovernor.reset();
         if (on) {
             disabledReason = null;
         }
@@ -192,11 +193,15 @@ public final class RegionTicker {
     private static <T> void run(ServerLevel level, List<T> items, int[] cx, int[] cz, Consumer<T> action, String what, int min, boolean entities) {
         String dim = level.dimension().location().toString();
         int maxJobs = threadsPerDimension();
-        RegionPlan plan = items.size() >= min ? RegionPlan.plan(cx, cz, items.size(), shift, maxJobs) : null;
+        boolean bigEnough = items.size() >= min;
+        RegionPlan plan = bigEnough && RegionGovernor.allowSplit(dim, entities) ? RegionPlan.plan(cx, cz, items.size(), shift, maxJobs) : null;
         if (plan == null) {
+            long serialStart = System.nanoTime();
             for (T item : items) {
                 action.accept(item);
             }
+            // Only loops that could have been split count as the one-thread baseline.
+            if (bigEnough) RegionGovernor.record(dim, entities, false, System.nanoTime() - serialStart, items.size());
             if (entities) LAST_REGIONS.put(dim, 1);
             LAST.merge(dim, describe(what, 1, 1, items.size()), RegionTicker::mergeDescription);
             return;
@@ -220,8 +225,11 @@ public final class RegionTicker {
         // The dimension's tick time already holds the split's wall time; what the region threads did beyond that is
         // extra work a single thread would have had to do (see AutoAdjust's speedup).
         long splitWall = System.nanoTime() - splitStart;
+        long applyStart = System.nanoTime();
         owner.regionExtraNanos += Math.max(0L, split.busyNanos.sum() - splitWall);
         split.applyDeferred();
+        // The queued changes are part of what the split costs.
+        RegionGovernor.record(dim, entities, true, splitWall + (System.nanoTime() - applyStart), items.size());
         if (entities) LAST_REGIONS.put(dim, plan.regions);
         LAST.merge(dim, describe(what, plan.regions, plan.jobs.length, items.size()), RegionTicker::mergeDescription);
         Throwable error = split.error;

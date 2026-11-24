@@ -123,6 +123,26 @@ can it be split. `/multicore status` shows the last split per dimension ("entiti
 What it gains depends on what ticks. Vanilla mobs, item entities, hoppers, furnaces and redstone run fully in parallel
 across regions; Create and other mods outside `regionSafeMods` take turns on the mod lock, as they do between dimensions.
 
+## Create in parallel
+
+Create used to run entirely under the mod lock. Now (`compatibility.threadSafeContent = ["create"]`, and
+`regions.regionSafeContent = ["create"]` for region threads) Create's block entities, entities and blocks (belts,
+shafts, fans, presses, mixers, fluids, contraptions, drills, deployers, arms...) run on several dimension and region
+threads at once; their state lives in the machine and its neighbours, which share one region. What every machine
+shares is guarded by MultiCore:
+
+| Shared by many machines | What MultiCore does |
+|---|---|
+| Stress networks (`TorquePropagator`, `KineticNetwork`), redstone link networks (`RedstoneLinkNetworkHandler`), the global logistics manager | Every method holds the mod lock (named `shared ...` in `/multicore locks`), also when the caller itself runs without it. |
+| Brass tunnel scratch collections, belt and chute shape caches, the belt "upright" cache | Per-thread, concurrent or synchronized. |
+| Create's per-world maps (`WorldAttached` of HashMaps and HashSets: pipe interfaces, minecarts, contraptions) | Synchronized. |
+| Trains (tracks, stations, signals, bogeys, controls, carriages), logistics (packagers, stock tickers, frogports, factory gauges, stock links, table cloths), display links (they read trains), toolboxes, cart assemblers | Listed in `compatibility.lockedContent`: they keep holding the mod lock, as before, because their networks span regions and dimensions. |
+| Create's event listeners | Unchanged: they still hold the mod lock unless listed in `threadSafeListeners` / `regionSafeListeners`. |
+
+Remove `"create"` from `threadSafeContent` (and `regionSafeContent`) to put all of Create back under the lock.
+`/multicore locks` shows what still takes the lock. `CreateTests.machinesInManyRegionsRunWithoutTheModLock` checks
+motors driving shafts and redstone links in four regions at once.
+
 ## Commands (op level 3)
 
 - `/multicore` or `/multicore status`: mode, parallel tick time vs. single-thread time, per-dimension tick times, lock and cross-dimension counters.

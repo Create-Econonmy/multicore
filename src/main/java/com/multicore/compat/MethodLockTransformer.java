@@ -41,7 +41,26 @@ public final class MethodLockTransformer {
                     || method.name.startsWith(PREFIX) || !calls(method, calleeOwner)) {
                 continue;
             }
-            wrappers.add(wrap(node, method, modId));
+            wrappers.add(wrap(node, method, modId, "enterForMod"));
+        }
+        node.methods.addAll(wrappers);
+        return wrappers.size();
+    }
+
+    /**
+     * Makes every method of the class run under the {@link com.multicore.core.ModLock} while a dimension or region thread
+     * ticks in parallel, even when the mod itself is thread-safe ({@code ModLock.enterShared}): for the few classes of a
+     * thread-safe mod that hold state shared by every dimension and region (a global manager, a static cache).
+     * Static initialisers and synthetic lambdas are left alone; lambdas run inside a locked caller anyway.
+     */
+    public static int wrapAllMethods(ClassNode node, String lockName) {
+        List<MethodNode> wrappers = new ArrayList<>();
+        for (MethodNode method : node.methods) {
+            if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE | Opcodes.ACC_SYNTHETIC | Opcodes.ACC_BRIDGE)) != 0
+                    || method.name.startsWith("<") || method.name.startsWith(PREFIX)) {
+                continue;
+            }
+            wrappers.add(wrap(node, method, lockName, "enterShared"));
         }
         node.methods.addAll(wrappers);
         return wrappers.size();
@@ -56,7 +75,7 @@ public final class MethodLockTransformer {
         return false;
     }
 
-    private static MethodNode wrap(ClassNode owner, MethodNode original, String modId) {
+    private static MethodNode wrap(ClassNode owner, MethodNode original, String modId, String enterMethod) {
         boolean isStatic = (original.access & Opcodes.ACC_STATIC) != 0;
         boolean isInterface = (owner.access & Opcodes.ACC_INTERFACE) != 0;
         String name = original.name;
@@ -97,7 +116,7 @@ public final class MethodLockTransformer {
         var insns = wrapper.instructions;
 
         insns.add(new LdcInsnNode(modId));
-        insns.add(new MethodInsnNode(Opcodes.INVOKESTATIC, LOCK, "enterForMod", "(Ljava/lang/String;)Z", false));
+        insns.add(new MethodInsnNode(Opcodes.INVOKESTATIC, LOCK, enterMethod, "(Ljava/lang/String;)Z", false));
         insns.add(new VarInsnNode(Opcodes.ISTORE, heldSlot));
         insns.add(start);
         int load = 0;

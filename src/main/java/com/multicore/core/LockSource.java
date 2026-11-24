@@ -32,6 +32,12 @@ public final class LockSource {
         return this.name;
     }
 
+    /** How often the lock was taken for this source name ("block entity create:shaft"), 0 if never (GameTests). */
+    public static long acquisitionsOf(String name) {
+        LockSource source = ALL.get(name);
+        return source == null ? 0 : source.acquisitions.sum();
+    }
+
     public static void reset() {
         ALL.values().forEach(s -> {
             s.acquisitions.reset();

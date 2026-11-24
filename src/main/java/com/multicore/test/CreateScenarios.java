@@ -175,6 +175,19 @@ final class CreateScenarios {
         });
     }
 
+    private static String receiverState(net.minecraft.world.level.block.entity.BlockEntity be, ServerLevel level) {
+        try {
+            java.lang.reflect.Field link = be.getClass().getDeclaredField("link");
+            link.setAccessible(true);
+            java.lang.reflect.Field init = com.simibubi.create.foundation.blockEntity.SmartBlockEntity.class.getDeclaredField("initialized");
+            init.setAccessible(true);
+            return "[link=" + link.get(be) + ", initialized=" + init.get(be) + ", removed=" + be.isRemoved()
+                    + ", loaded=" + level.isLoaded(be.getBlockPos()) + ", sameBE=" + (level.getBlockEntity(be.getBlockPos()) == be) + "]";
+        } catch (ReflectiveOperationException e) {
+            return "[" + e + "]";
+        }
+    }
+
     /** The station's last assembly error (a protected field), for the test log. */
     private static String assemblyProblem(StationBlockEntity station) {
         try {
@@ -185,6 +198,87 @@ final class CreateScenarios {
         } catch (ReflectiveOperationException e) {
             return "unknown (" + e + ")";
         }
+    }
+
+    // ---- machines that run without the mod lock ----
+
+    /**
+     * Four regions far apart, each with a crowd (so the dimension is split) and a creative motor driving a line of shafts,
+     * plus a redstone link transmitter powered by a redstone block and a receiver three blocks away. All four share Create's
+     * stress networks and redstone link handler. Every shaft must reach the motor's speed, every receiver must be powered,
+     * and none of the shafts' ticks may have taken the mod lock (Create's machines run in parallel; only the shared
+     * managers lock).
+     */
+    static void machinesInManyRegions(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos o = helper.absolutePos(BlockPos.ZERO);
+        int y = 150, count = 4, shafts = 6;
+        long locksBefore = com.multicore.core.LockSource.acquisitionsOf("block entity create:shaft")
+                + com.multicore.core.LockSource.acquisitionsOf("block entity create:creative_motor")
+                + com.multicore.core.LockSource.acquisitionsOf("block entity create:redstone_link");
+        List<Pig> pigs = new ArrayList<>();
+        List<List<BlockPos>> shaftPositions = new ArrayList<>();
+        List<BlockPos> receivers = new ArrayList<>();
+        List<int[]> spots = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            int x = o.getX() + 31000 + i * 5000, z = o.getZ() + 12000 - i * 3000;
+            spots.add(new int[]{x, z});
+            force(level, x, z, true);
+            pigs.addAll(crowd(level, x, y, z));
+            int mz = z - 8;
+            for (int dx = -1; dx <= shafts + 1; dx++) level.setBlock(new BlockPos(x + dx, y - 1, mz), Blocks.STONE.defaultBlockState(), 3);
+            level.setBlock(new BlockPos(x, y, mz), with(block("create:creative_motor").defaultBlockState(), BlockStateProperties.FACING, Direction.EAST), 3);
+            List<BlockPos> line = new ArrayList<>();
+            for (int s = 1; s <= shafts; s++) {
+                BlockPos p = new BlockPos(x + s, y, mz);
+                level.setBlock(p, with(block("create:shaft").defaultBlockState(), BlockStateProperties.AXIS, Direction.Axis.X), 3);
+                line.add(p);
+            }
+            shaftPositions.add(line);
+            int lz = z - 14;
+            for (int dz = -1; dz <= 5; dz++) level.setBlock(new BlockPos(x, y - 1, lz + dz), Blocks.STONE.defaultBlockState(), 3);
+            BlockState link = with(block("create:redstone_link").defaultBlockState(), BlockStateProperties.FACING, Direction.UP);
+            level.setBlock(new BlockPos(x, y, lz), link, 3);
+            // After the link: its neighbour update schedules the tick that makes it transmit.
+            level.setBlock(new BlockPos(x + 1, y, lz), Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+            BlockPos receiver = new BlockPos(x, y, lz + 3);
+            // Placed as a transmitter and switched after it has ticked, like a player with a wrench (a link that never
+            // ticked as a transmitter has no link behaviour to switch).
+            level.setBlock(receiver, link, 3);
+            helper.runAfterDelay(60, () -> ((com.simibubi.create.content.redstone.link.RedstoneLinkBlock) link.getBlock())
+                    .toggleMode(level.getBlockState(receiver), level, receiver));
+            receivers.add(receiver);
+        }
+        helper.succeedWhen(() -> {
+            for (int i = 0; i < count; i++) {
+                for (BlockPos p : shaftPositions.get(i)) {
+                    var be = level.getBlockEntity(p);
+                    helper.assertTrue(be instanceof com.simibubi.create.content.kinetics.base.KineticBlockEntity, "no shaft at " + p);
+                    float speed = ((com.simibubi.create.content.kinetics.base.KineticBlockEntity) be).getSpeed();
+                    helper.assertTrue(Math.abs(speed) > 0.5F, "the shaft at " + p + " does not turn (speed " + speed + ")");
+                }
+                var receiver = level.getBlockEntity(receivers.get(i));
+                var transmitterPos = receivers.get(i).south(-3);
+                var transmitter = level.getBlockEntity(transmitterPos);
+                helper.assertTrue(receiver instanceof com.simibubi.create.content.redstone.link.RedstoneLinkBlockEntity link
+                        && link.getReceivedSignal() > 0, "the receiver at " + receivers.get(i) + " is not powered (region " + i
+                        + "; transmitter transmits "
+                        + (transmitter instanceof com.simibubi.create.content.redstone.link.RedstoneLinkBlockEntity t ? t.getSignal() + "" : "no BE")
+                        + "; networks "
+                        + com.simibubi.create.Create.REDSTONE_LINK_NETWORK_HANDLER.networksIn(level).values().stream().map(set -> set.stream().map(l -> l.getLocation().toShortString() + (l.isListening() ? "R" : "T")).toList().toString()).toList()
+                        + ", receiver block " + level.getBlockState(receivers.get(i)) + " " + receiverState(receiver, level)
+                        + ", block " + level.getBlockState(transmitterPos) + ", redstone block "
+                        + level.getBlockState(transmitterPos.east()) + ", receiver BE " + receiver + ")");
+            }
+            long locksNow = com.multicore.core.LockSource.acquisitionsOf("block entity create:shaft")
+                    + com.multicore.core.LockSource.acquisitionsOf("block entity create:creative_motor")
+                    + com.multicore.core.LockSource.acquisitionsOf("block entity create:redstone_link");
+            // The shared managers lock (TorquePropagator...), under their own names; the machines themselves must not.
+            helper.assertTrue(locksNow == locksBefore, "the machines still take the mod lock (" + (locksNow - locksBefore) + " times)");
+            assertStillOn(helper);
+            pigs.forEach(Entity::discard);
+            for (int i = 0; i < count; i++) force(level, spots.get(i)[0], spots.get(i)[1], false);
+        });
     }
 
     // ---- trains ----

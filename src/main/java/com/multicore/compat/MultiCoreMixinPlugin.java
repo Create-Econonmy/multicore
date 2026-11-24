@@ -76,6 +76,12 @@ public final class MultiCoreMixinPlugin implements IMixinConfigPlugin {
         } else if (mixinClassName.endsWith(".railways.MixinVariablesCarrier")) {
             int rewritten = ThreadLocalStaticsTransformer.rewrite(targetClass, RAILS_MIXIN_VARIABLES, RAILS_FIELDS);
             MultiCore.LOGGER.info("[MultiCore] {}: {} uses of Steam 'n' Rails flag fields made per-thread", targetClassName, rewritten);
+        } else if (mixinClassName.endsWith(".create.SharedStateLockCarrier")) {
+            int wrapped = MethodLockTransformer.wrapAllMethods(targetClass, "create " + targetClassName.substring(targetClassName.lastIndexOf('.') + 1));
+            MultiCore.LOGGER.info("[MultiCore] {}: {} methods take the mod lock (state shared by every machine)", targetClassName, wrapped);
+        } else if (mixinClassName.endsWith(".create.BrassTunnelStaticsCarrier")) {
+            int rewritten = ThreadLocalStaticsTransformer.rewrite(targetClass, ThreadStatics.CREATE_BRASS_TUNNEL, CREATE_BRASS_TUNNEL_FIELDS);
+            MultiCore.LOGGER.info("[MultiCore] {}: {} uses of the brass tunnel's scratch collections made per-thread", targetClassName, rewritten);
         } else if (mixinClassName.endsWith(".create.DeployerCaptureCarrier")) {
             int rewritten = ThreadLocalStaticsTransformer.rewrite(targetClass, ThreadStatics.CREATE_DEPLOYER_HANDLER, CREATE_DEPLOYER_FIELDS);
             MultiCore.LOGGER.info("[MultiCore] {}: {} uses of Create's deployer drop capture made per-thread", targetClassName, rewritten);
@@ -85,6 +91,7 @@ public final class MultiCoreMixinPlugin implements IMixinConfigPlugin {
     private static final String RAILS_MIXIN_VARIABLES = "com/railwayteam/railways/util/MixinVariables";
     private static final Set<String> RAILS_FIELDS = Set.of("trackEdgeTemporarilyFlipped", "trackEdgeCarriageTravelling",
             "temporarilySkipSwitches", "signalPropagatorCallDepth", "navigationCallDepth", "largeGhastFireballExplosion");
+    private static final Set<String> CREATE_BRASS_TUNNEL_FIELDS = Set.of("distributed", "full");
     private static final Set<String> CREATE_DEPLOYER_FIELDS = Set.of("CAPTURED_BLOCK_DROPS", "CAPTURED_BLOCK_DROPS_VIEW");
 
     private static final String OPAC_SERVER_CORE = "xaero/pac/common/server/core/ServerCore";

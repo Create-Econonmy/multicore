@@ -16,6 +16,7 @@ public final class ThreadStatics {
     static final String CREATE_DEPLOYER_HANDLER = "com/simibubi/create/content/kinetics/deployer/DeployerHandler";
     static final String CREATE_CAPTURED_DROPS = CREATE_DEPLOYER_HANDLER + ".CAPTURED_BLOCK_DROPS";
     static final String CREATE_CAPTURED_DROPS_VIEW = CREATE_DEPLOYER_HANDLER + ".CAPTURED_BLOCK_DROPS_VIEW";
+    static final String CREATE_BRASS_TUNNEL = "com/simibubi/create/content/logistics/tunnel/BrassTunnelBlockEntity";
     private static final Object UNSET = new Object();
     private static final ThreadLocal<HashMap<String, Object>> VALUES = ThreadLocal.withInitial(HashMap::new);
     private static final Map<String, Field> FIELDS = new ConcurrentHashMap<>();
@@ -82,6 +83,8 @@ public final class ThreadStatics {
      * one. Keyed like the fields themselves.
      */
     private static final Map<String, Supplier<Object>> FRESH_VALUES = Map.of(
+            CREATE_BRASS_TUNNEL + ".distributed", java.util.IdentityHashMap::new,
+            CREATE_BRASS_TUNNEL + ".full", java.util.HashSet::new,
             CREATE_CAPTURED_DROPS, HashMap::new,
             CREATE_CAPTURED_DROPS_VIEW, () -> Collections.unmodifiableMap((Map<?, ?>) getObject(CREATE_CAPTURED_DROPS)));
 

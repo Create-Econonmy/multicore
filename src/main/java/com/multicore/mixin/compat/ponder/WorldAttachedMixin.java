@@ -13,6 +13,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -43,8 +44,16 @@ public abstract class WorldAttachedMixin {
         allMaps = Collections.synchronizedList(allMaps);
     }
 
+    /** Created by Create's own classes: its plain HashMap / HashSet values are used by machines on several region threads. */
+    @Unique
+    private boolean multicore$createOwned;
+
     @Inject(method = "<init>", at = @At("RETURN"))
     private void multicore$synchronizeMap(CallbackInfo ci) {
+        this.multicore$createOwned = StackWalker.getInstance().walk(frames -> frames
+                .map(StackWalker.StackFrame::getClassName)
+                .filter(name -> !name.startsWith("net.createmod.catnip.data."))
+                .findFirst().map(name -> name.startsWith("com.simibubi.create.")).orElse(false));
         Map<LevelAccessor, Object> original = this.attached;
         this.attached = Collections.synchronizedMap(original);
         // The constructor registered the unwrapped map for invalidateWorld(); register the wrapper instead so removals
@@ -66,6 +75,14 @@ public abstract class WorldAttachedMixin {
             return existing;
         }
         Object created = this.factory.apply(world);
+        if (this.multicore$createOwned) {
+            // Exact classes only: a use site may cast to a concrete type (a WeakHashMap) or rely on iteration order.
+            if (created != null && created.getClass() == java.util.HashMap.class) {
+                created = Collections.synchronizedMap((Map<?, ?>) created);
+            } else if (created != null && created.getClass() == java.util.HashSet.class) {
+                created = Collections.synchronizedSet((java.util.Set<?>) created);
+            }
+        }
         synchronized (this.attached) {
             Object winner = this.attached.get(world);
             if (winner != null) {

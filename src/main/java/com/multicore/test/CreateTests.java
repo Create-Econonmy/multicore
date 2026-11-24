@@ -36,4 +36,9 @@ public final class CreateTests {
     public static void trainDrivesFromOneRegionIntoAnother(GameTestHelper helper) {
         if (!noCreate(helper)) CreateScenarios.trainDrivesFromOneRegionIntoAnother(helper);
     }
+
+    @GameTest(template = "empty", batch = "create_parallel", timeoutTicks = 1200)
+    public static void machinesInManyRegionsRunWithoutTheModLock(GameTestHelper helper) {
+        if (!noCreate(helper)) CreateScenarios.machinesInManyRegions(helper);
+    }
 }

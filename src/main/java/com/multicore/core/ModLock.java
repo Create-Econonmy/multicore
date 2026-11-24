@@ -162,6 +162,16 @@ public final class ModLock {
         return false;
     }
 
+    private static final Map<String, LockSource> SHARED_SOURCES = new ConcurrentHashMap<>();
+
+    /**
+     * {@link #enterSharedState} by name, for bytecode added by {@code MethodLockTransformer.wrapAllMethods}: a class of a
+     * thread-safe mod (Create's global logistics manager) whose state every dimension and region thread shares.
+     */
+    public static boolean enterShared(String name) {
+        return enterSharedState(SHARED_SOURCES.computeIfAbsent(name, n -> LockSource.of("shared " + n)));
+    }
+
     public static void exit(boolean entered) {
         if (entered) {
             release();

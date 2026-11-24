@@ -34,8 +34,12 @@ public final class MultiCoreConfig {
     public static final ModConfigSpec.IntValue REGION_THREADS;
     public static final ModConfigSpec.IntValue REGION_MIN_ENTITIES;
     public static final ModConfigSpec.IntValue REGION_MIN_BLOCK_ENTITIES;
+    public static final ModConfigSpec.BooleanValue REGION_ONLY_WHEN_FASTER;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REGION_EXCLUDED_DIMENSIONS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REGION_SAFE_MODS;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> REGION_SAFE_CONTENT;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> THREAD_SAFE_CONTENT;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> LOCKED_CONTENT;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REGION_SAFE_LISTENERS;
     public static final ModConfigSpec.BooleanValue MAP_ENABLED;
     public static final ModConfigSpec.ConfigValue<String> MAP_BIND;
@@ -117,6 +121,26 @@ public final class MultiCoreConfig {
                         "Mod ids whose content may run on several dimension threads at once.",
                         "Only add a mod after checking it keeps no shared state between dimensions.")
                 .defineListAllowEmpty("threadSafeMods", List.of("minecraft", "neoforge", "multicore"), () -> "", o -> o instanceof String);
+        THREAD_SAFE_CONTENT = b.comment(
+                        "Mod ids whose block entities, entities and blocks may run on several dimension threads at once, while the",
+                        "mod's event listeners still hold the mod lock (unless listed in threadSafeListeners). Content listed in",
+                        "lockedContent still holds the lock. Create is here: its machines (belts, shafts, fans, presses, fluids,",
+                        "contraptions) keep their state per block, and the few things every machine shares (Create's redstone link",
+                        "and stress networks, global logistics manager, static caches) are made safe by MultiCore itself.",
+                        "Remove \"create\" to run all of Create under the mod lock again.")
+                .defineListAllowEmpty("threadSafeContent", List.of("create"), () -> "", o -> o instanceof String);
+        LOCKED_CONTENT = b.comment(
+                        "Block entity, entity and block ids (\"modid:path\", * matches anything) that always hold the mod lock, even",
+                        "when their mod is in threadSafeContent. The defaults are the parts of Create that share objects across the",
+                        "whole world: trains (tracks, stations, signals, bogeys), logistics (packagers, stock tickers, frogports,",
+                        "factory gauges, stock links), display links (they read trains), toolboxes and cart assemblers.")
+                .defineListAllowEmpty("lockedContent", List.of(
+                        "create:*track*", "create:*signal*", "create:*bogey*", "create:*station*", "create:controls",
+                        "create:*train*", "create:carriage_contraption", "create:cart_assembler",
+                        "create:packager", "create:repackager", "create:package_frogport", "create:package_postbox",
+                        "create:packager_link", "create:stock_ticker", "create:redstone_requester", "create:factory_panel",
+                        "create:table_cloth", "create:display_link", "create:toolbox"
+                ), () -> "", o -> o instanceof String);
         THREAD_SAFE_LISTENERS = b.comment(
                         "Single event listeners that may run on several dimension threads at once, as \"modid:EventName\"",
                         "(nested events with $, e.g. \"curios:EntityTickEvent$Post\"). /multicore locks shows the busiest ones.",
@@ -155,12 +179,22 @@ public final class MultiCoreConfig {
                 .defineInRange("minEntities", 32, 0, 1_000_000);
         REGION_MIN_BLOCK_ENTITIES = b.comment("Only split a dimension's block entities when it has at least this many ticking.")
                 .defineInRange("minBlockEntities", 64, 0, 1_000_000);
+        REGION_ONLY_WHEN_FASTER = b.comment(
+                        "Time every split dimension both ways (one thread vs region threads, per entity and per block entity) and only",
+                        "split while the split is clearly faster. Worlds full of mod machines (Create) run all their code under the one",
+                        "mod lock, so splitting them is slower than one thread; those fall back to one thread and retry later.")
+                .define("onlyWhenFaster", true);
         REGION_EXCLUDED_DIMENSIONS = b.comment("Dimensions that are never split, e.g. [\"minecraft:the_end\"].")
                 .defineListAllowEmpty("excludedDimensions", List.of(), () -> "", o -> o instanceof String);
         REGION_SAFE_MODS = b.comment(
                         "Mod ids whose code may run on several region threads of the same dimension at once. Code of every other mod",
                         "(even threadSafeMods) holds the mod lock on a region thread: a mod may keep state per dimension.")
                 .defineListAllowEmpty("regionSafeMods", List.of("minecraft", "neoforge", "multicore"), () -> "", o -> o instanceof String);
+        REGION_SAFE_CONTENT = b.comment(
+                        "Mods whose block entities, entities and blocks (see threadSafeContent) may run on several region threads of",
+                        "the same dimension at once. Create's per-world data is made safe for that; remove \"create\" to run Create's",
+                        "machines under the mod lock on region threads.")
+                .defineListAllowEmpty("regionSafeContent", List.of("create"), () -> "", o -> o instanceof String);
         REGION_SAFE_LISTENERS = b.comment(
                         "Single event listeners that may run on several region threads of one dimension at once (\"modid:EventName\").",
                         "The defaults only touch the entity they are given.")
