@@ -1,4 +1,4 @@
-# Installing MultiCore 0.3.1 on the Create Economy server: instructions for an AI agent
+# Installing MultiCore 0.4.0 on the Create Economy server: instructions for an AI agent
 
 You are helping the server's owner install **MultiCore**, a server-side NeoForge mod that ticks the server's worlds on
 several CPU threads (Folia-style). Read this whole file before doing anything. Follow it step by step and stop at
@@ -57,7 +57,7 @@ every **CHECKPOINT** to report to the owner and wait for their go-ahead.
 ## 4. Before installing (read-only, then CHECKPOINT)
 
 1. **Find the files to install.** They're in this folder (`server-install/` of the MultiCore project on the owner's PC):
-   - `mods/multicore-0.3.1.jar`: the mod. Its SHA-256 must be `e713fca0ccf15c5561dea98ea7b6cf858e913b8210106d6f04fda51cc6dccb03` (also in `INSTALL.txt`).
+   - `mods/multicore-0.4.0.jar`: the mod. Its SHA-256 must be `ef0021ef7f00eec3e498dd8d6a5d38c3ec3eb81fba1bc8ba8642036af839c13f` (also in `INSTALL.txt`).
    - `config/multicore-common.toml`: the default config. Optional; the mod writes it on first start anyway.
 2. **Compare the server's mods with the tested list.** List the server's `mods/` folder and compare it with
    `tools/server-mods-2026-11-15.txt` in the project (the mod list MultiCore was tested with). Report every jar that
@@ -74,10 +74,12 @@ every **CHECKPOINT** to report to the owner and wait for their go-ahead.
 
 ## 5. Install (server stopped)
 
-1. Copy `multicore-0.3.1.jar` into the server's `mods/`. If an older `multicore-*.jar` is there, move it out of
+1. Copy `multicore-0.4.0.jar` into the server's `mods/`. If an older `multicore-*.jar` is there, move it out of
    `mods/` (keep it in the backup); never have two versions in `mods/`.
-2. Optional: copy `config/multicore-common.toml` into the server's `config/`. If one already exists, keep the
-   server's file and tell the owner. New options are added automatically.
+2. Copy `config/multicore-common.toml` into the server's `config/`, then in it set `unlockAllMods = false` (stages A
+   and B run with mods locked, as 0.3 did; stage C unlocks them). If the server already has this file, keep a copy of
+   it in the backup and tell the owner before replacing it: 0.4.0's defaults differ (unlockAllMods, lockedListeners,
+   idleMs, autoScale).
 3. Don't remove dimthread yet.
 
 ## 6. First start (MultiCore standing by)
@@ -100,14 +102,17 @@ Switch it on in stages and watch each stage for at least 15–30 minutes with pl
 |---|---|---|
 | A. Dimension threads only | `/multicore regions off` then `/gamerule dimthread_active false` | `/multicore status` shows "Mode: parallel dimensions", worlds on "MultiCore ..." threads |
 | B. Region threads too | `/multicore regions on` | `/multicore status` shows "Region threads: on" and, for busy worlds, lines like "entities: 812 in 3 regions on 3 threads" |
+| C. Every mod unlocked | stop the server, set `unlockAllMods = true` in `config/multicore-common.toml`, start it, then stages A and B again | `/multicore status` shows "All mods unlocked", "Static guard: … methods take the lock", "Players on dimension threads: …" |
 
 What to watch at every stage:
 - `/multicore status`: mode, each world's thread and tick time, the main-thread breakdown, region splits, and
   "cross-region pauses (… timed out)". A non-zero "timed out" count should be reported.
 - `/spark tps` (spark is installed): compare MSPT/TPS with what it was under dimthread.
 - `logs/latest.log`: look for `[MultiCore]` warnings. "Threading error", "switching to vanilla", "Region threading is
-  switched off", "could not pause the other region threads", "is taking over … ms" with thread dumps: report each one
-  with its stack trace.
+  switched off", "could not pause", "waited 10 s for the mod lock", "waited 100 ms for the mod lock … inside a mod's own
+  synchronized code", "is taking over … ms" with thread dumps, and any `ConcurrentModificationException` or "Ticking
+  block entity"/"Ticking entity" crash report: report each one with its stack trace. At stage C these mean a mod that
+  needs to be locked: the quick fix is adding it to `lockedContent` (`"modid:*"`) and restarting, or `unlockAllMods = false`.
 - Ask the owner (or players) to try the usual things: Create trains running between stations, factory/stock ticker
   requests, `/tpa`, `/home`, `/pay`, chests, portals between worlds. These all passed automated tests, but a real client
   hasn't been tested yet.
@@ -127,7 +132,7 @@ gamerule `dimthread_active false` is saved with the world.
 |---|---|
 | Something odd and region threads are on | `/multicore regions off` |
 | Still odd | `/multicore off` (plain single-thread ticking) or `/gamerule dimthread_active true` (back to dimthread) |
-| Server won't start or crashes on start | Stop it, move `mods/multicore-0.3.1.jar` out of `mods/`, start again. Nothing else to undo: MultiCore stores nothing in the world (its `config/multicore-common.toml` and `multicore-map/` folder can stay or go) |
+| Server won't start or crashes on start | Stop it, move `mods/multicore-0.4.0.jar` out of `mods/`, start again. Nothing else to undo: MultiCore stores nothing in the world (its `config/multicore-common.toml` and `multicore-map/` folder can stay or go) |
 
 ## 9. Later (only after several good days, and with the owner's yes)
 

@@ -12,20 +12,6 @@ import org.spongepowered.asm.mixin.Pseudo;
  */
 @Pseudo
 @Mixin(targets = {
-        "com.createeconomy.fixes.guard.DupeDetector",
-        "com.createeconomy.fixes.guard.Guard",
-        "com.createeconomy.fixes.guard.ItemScan",
-        "com.createeconomy.fixes.guard.Reports",
-        "com.dowar.mods.create_mixed_casing.registry.MixedPartialModels",
-        "com.dudko.blazinghot.data.advancement.BlazingTriggers",
-        "com.dudko.blazinghot.util.WorldUtil",
-        "com.forsteri.createendertransmission.blocks.MatterWorldSavedData",
-        "com.github.alexthe666.alexsmobs.entity.util.RockyChestplateUtil",
-        "com.github.alexthe666.alexsmobs.world.AMWorldData",
-        "com.github.alexthe666.citadel.server.entity.pathfinding.raycoms.AdvancedPathNavigate",
-        "com.github.alexthe666.citadel.server.entity.pathfinding.raycoms.pathjobs.AbstractPathJob",
-        "com.github.alexthe666.citadel.server.world.CitadelServerData",
-        "com.github.alexthe666.citadel.server.world.ExpandedBiomes",
         "com.github.razorplay01.inv_view.util.InventoryLockManager",
         "com.github.talrey.createdeco.api.CreateDecoTags",
         "com.github.talrey.createdeco.connected.SpriteShifts",
@@ -37,9 +23,6 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.happysg.radar.compat.cbc.VelocityTracker",
         "com.happysg.radar.compat.vs2.VS2ShipVelocityTracker",
         "com.happysg.radar.compat.vs2.VSAssemblySuppression",
-        "com.happysg.radar.math3.analysis.polynomials.PolynomialsUtils",
-        "com.happysg.radar.math3.ode.nonstiff.AdamsNordsieckFieldTransformer",
-        "com.happysg.radar.math3.ode.nonstiff.AdamsNordsieckTransformer",
         "com.happysg.radar.registry.ModCommands",
         "com.hlysine.create_connected.datagen.advancements.CCTriggers",
         "com.hlysine.create_connected.datagen.recipes.CCStandardRecipes$ModdedCookingRecipeOutputShim",
@@ -51,7 +34,24 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.hubessentials.HomeData",
         "com.hubessentials.Hub",
         "com.hubessentials.Teleports",
-        "com.hubessentials.TpaCommands"
+        "com.hubessentials.TpaCommands",
+        "com.hubportals.NpcData",
+        "com.hubportals.PortalNpc",
+        "com.hypherionmc.craterlib.core.loader.plugins.CraterPluginLoader",
+        "com.hypherionmc.craterlib.libs.kyori.adventure.text.event.DataComponentValueConverterRegistry$ConversionCache",
+        "com.hypherionmc.sdlink.core.discord.events.DiscordEventHandler",
+        "com.hypherionmc.sdlink.core.managers.PermissionChecker",
+        "com.hypherionmc.sdlink.shaded.dv8tion.jda.api.hooks.ListenerAdapter",
+        "com.hypherionmc.sdlink.shaded.dv8tion.jda.api.requests.Route",
+        "com.hypherionmc.sdlink.shaded.jagrosh.jdautilities.menu.ButtonEmbedPaginator",
+        "com.hypherionmc.sdlink.shaded.net.fellbaum.jemoji.EmojiManager",
+        "com.hypherionmc.sdlink.shaded.oshi.driver.windows.registry.HkeyPerformanceDataUtil",
+        "com.hypherionmc.sdlink.shaded.oshi.software.os.linux.LinuxFileSystem",
+        "com.hypherionmc.sdlink.shaded.oshi.software.os.mac.MacFileSystem",
+        "com.hypherionmc.sdlink.shaded.oshi.software.os.unix.aix.AixFileSystem",
+        "com.hypherionmc.sdlink.shaded.oshi.software.os.unix.freebsd.FreeBsdFileSystem",
+        "com.hypherionmc.sdlink.shaded.oshi.software.os.unix.openbsd.OpenBsdFileSystem",
+        "com.hypherionmc.sdlink.shaded.oshi.software.os.unix.solaris.SolarisFileSystem"
 }, remap = false)
 public abstract class StaticGuardCarrier01 {
 }

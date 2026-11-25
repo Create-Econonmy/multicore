@@ -78,6 +78,12 @@ public final class MultiCoreMixinPlugin implements IMixinConfigPlugin {
             }
             return;
         }
+        if (mixinClassName.endsWith(".createendertransmission.ChannelPauseCarrier")) {
+            int wrapped = MethodLockTransformer.wrapMethodsTouching(targetClass, ENDER_CHANNELS,
+                    "createendertransmission channels", "enterSharedPausing");
+            MultiCore.LOGGER.info("[MultiCore] {}: {} methods that use the transmitter channels take the lock and pause the world", targetClassName, wrapped);
+            return;
+        }
         if (mixinClassName.endsWith(".sable.RapierNativeLockCarrier")) {
             int wrapped = MethodLockTransformer.wrapMethodsCalling(targetClass, "dev/ryanhcode/sable/physics/impl/rapier/Rapier3D", "sable");
             MultiCore.LOGGER.info("[MultiCore] {}: {} methods that call Sable's native physics now take the mod lock", targetClassName, wrapped);
@@ -109,6 +115,9 @@ public final class MultiCoreMixinPlugin implements IMixinConfigPlugin {
         }
     }
 
+    private static final Set<String> ENDER_CHANNELS = Set.of(
+            "com/forsteri/createendertransmission/blocks/energyTransmitter/EnergyNetwork.channels",
+            "com/forsteri/createendertransmission/blocks/MatterTransmitterNetwork.channels");
     private static final String RAILS_MIXIN_VARIABLES = "com/railwayteam/railways/util/MixinVariables";
     private static final Set<String> RAILS_FIELDS = Set.of("trackEdgeTemporarilyFlipped", "trackEdgeCarriageTravelling",
             "temporarilySkipSwitches", "signalPropagatorCallDepth", "navigationCallDepth", "largeGhastFireballExplosion");

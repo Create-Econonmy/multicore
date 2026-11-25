@@ -12,24 +12,6 @@ import org.spongepowered.asm.mixin.Pseudo;
  */
 @Pseudo
 @Mixin(targets = {
-        "com.hubportals.NpcData",
-        "com.hubportals.PortalNpc",
-        "com.hypherionmc.craterlib.core.loader.plugins.CraterPluginLoader",
-        "com.hypherionmc.craterlib.libs.kyori.adventure.text.event.DataComponentValueConverterRegistry$ConversionCache",
-        "com.hypherionmc.sdlink.core.discord.events.DiscordEventHandler",
-        "com.hypherionmc.sdlink.core.managers.PermissionChecker",
-        "com.hypherionmc.sdlink.shaded.dv8tion.jda.api.hooks.ListenerAdapter",
-        "com.hypherionmc.sdlink.shaded.dv8tion.jda.api.requests.Route",
-        "com.hypherionmc.sdlink.shaded.dv8tion.jda.internal.utils.JDALogger",
-        "com.hypherionmc.sdlink.shaded.jagrosh.jdautilities.menu.ButtonEmbedPaginator",
-        "com.hypherionmc.sdlink.shaded.net.fellbaum.jemoji.EmojiManager",
-        "com.hypherionmc.sdlink.shaded.oshi.driver.windows.registry.HkeyPerformanceDataUtil",
-        "com.hypherionmc.sdlink.shaded.oshi.software.os.linux.LinuxFileSystem",
-        "com.hypherionmc.sdlink.shaded.oshi.software.os.mac.MacFileSystem",
-        "com.hypherionmc.sdlink.shaded.oshi.software.os.unix.aix.AixFileSystem",
-        "com.hypherionmc.sdlink.shaded.oshi.software.os.unix.freebsd.FreeBsdFileSystem",
-        "com.hypherionmc.sdlink.shaded.oshi.software.os.unix.openbsd.OpenBsdFileSystem",
-        "com.hypherionmc.sdlink.shaded.oshi.software.os.unix.solaris.SolarisFileSystem",
         "com.hypherionmc.sdlink.shaded.oshi.software.os.windows.WindowsFileSystem",
         "com.hypherionmc.sdlink.shaded.oshi.util.platform.mac.SmcUtil",
         "com.hypherionmc.sdlink.shaded.oshi.util.platform.windows.PerfCounterQuery",
@@ -51,7 +33,25 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.jesz.createdieselgenerators.compat.kubejs.MoldEventJS",
         "com.jesz.createdieselgenerators.content.molds.MoldType",
         "com.jesz.createdieselgenerators.world.OilChunksSavedData",
-        "com.kipti.bnb.foundation.caching.LevelSafeStorage"
+        "com.kipti.bnb.foundation.caching.LevelSafeStorage",
+        "com.kipti.bnb.foundation.caching.LevelSimpleCache",
+        "com.kreidev.cmpackagecouriers.CourierTarget",
+        "com.kreidev.cmpackagecouriers.plane.CardboardPlaneSavedData",
+        "com.lowtierchud.aeroradar.link.CbcFixedMounts",
+        "com.lowtierchud.aeroradar.link.RadarAutoTargetBridge",
+        "com.lowtierchud.aeroradar.link.RadarNetworkLinks",
+        "com.lowtierchud.aeroradar.link.RadarTargeting",
+        "com.mafuyu404.taczaddon.common.BetterGunSmithTable",
+        "com.mafuyu404.taczaddon.init.ContainerReaderState",
+        "com.mafuyu404.taczaddon.network.ServerboundPacketGuard",
+        "com.mred231.aeroworks.content.controls.module.ModuleStyles",
+        "com.mred231.aeroworks.content.gyroscope.GyroscopeController",
+        "com.mrh0.createaddition.blocks.portable_energy_interface.PortableEnergyManager",
+        "com.mrh0.createaddition.compat.jei.CreateAdditionJEI$CategoryBuilder",
+        "com.mrh0.createaddition.energy.network.EnergyNetwork",
+        "com.mrh0.createaddition.energy.network.EnergyNetworkManager",
+        "com.mrvew.aerowarp.WarpClaims",
+        "com.mrvew.aerowarp.WarpJumps"
 }, remap = false)
 public abstract class StaticGuardCarrier02 {
 }

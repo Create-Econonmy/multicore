@@ -40,6 +40,8 @@ OWN_CARRIERS = {
     "fr/rakambda/fallingtree/neoforge/common/FallingTreeCommonsImpl",
     "com/railwayteam/railways/util/MixinVariables",
     "xaero/pac/common/server/core/ServerCore",
+    "com/forsteri/createendertransmission/blocks/energyTransmitter/EnergyTransmitterBlockEntity",
+    "com/forsteri/createendertransmission/blocks/AbstractMatterTransmitterBlockEntity",
 }
 
 fields = [f for f in lines("guard-fields.txt") if f not in HANDLED_FIELDS]

@@ -446,22 +446,43 @@ public final class PackAnalyzer {
         if (cn.superName != null) SUPERS.put(cn.name, cn.superName);
         if ((cn.access & Opcodes.ACC_INTERFACE) != 0) INTERFACES.add(cn.name);
         if (isClientClass(cn)) CLIENT_CLASSES.add(cn.name);
+        for (MethodNode m : cn.methods) {
+            boolean sync = (m.access & Opcodes.ACC_SYNCHRONIZED) != 0;
+            for (AbstractInsnNode i = m.instructions == null ? null : m.instructions.getFirst(); i != null && !sync; i = i.getNext()) {
+                sync = i.getOpcode() == Opcodes.MONITORENTER;
+            }
+            if (sync) {
+                SELF_SYNC.add(cn.name);
+                break;
+            }
+        }
         boolean iface = (cn.access & Opcodes.ACC_INTERFACE) != 0;
         for (MethodNode mn : cn.methods) {
             if (mn.name.equals("<clinit>") || mn.instructions == null) continue;
             Set<String> read = new LinkedHashSet<>();
             boolean mutates = false;
+            boolean readsOwnCollection = false;
             for (AbstractInsnNode insn = mn.instructions.getFirst(); insn != null; insn = insn.getNext()) {
                 if (insn instanceof FieldInsnNode fin && fin.getOpcode() == Opcodes.GETSTATIC) {
                     Type t = Type.getType(fin.desc);
                     if (t.getSort() == Type.OBJECT && (isUnsafeCollection(t.getInternalName()) || COLLECTION_INTERFACES.contains(t.getInternalName()))) {
                         read.add(fin.owner + "." + fin.name);
+                    } else if (t.getSort() == Type.OBJECT) {
+                        // Maybe a singleton (a mod object kept in a static field); decided once every class is known.
+                        OBJECT_READS.computeIfAbsent(cn.name, k -> new java.util.HashSet<>()).add(fin.owner + "." + fin.name);
+                        STATIC_TYPES.put(fin.owner + "." + fin.name, t.getInternalName());
+                    }
+                } else if (insn instanceof FieldInsnNode fin && fin.getOpcode() == Opcodes.GETFIELD && fin.owner.equals(cn.name)) {
+                    Type t = Type.getType(fin.desc);
+                    if (t.getSort() == Type.OBJECT && (isUnsafeCollection(t.getInternalName()) || COLLECTION_INTERFACES.contains(t.getInternalName()))) {
+                        readsOwnCollection = true;
                     }
                 } else if (insn instanceof MethodInsnNode min && MUTATORS.contains(min.name)
                         && (min.owner.startsWith("java/util/") || min.owner.startsWith("it/unimi/"))) {
                     mutates = true;
                 }
             }
+            if (readsOwnCollection && mutates && !STARTUP_METHOD.matcher(mn.name).matches()) MUTABLE_HOLDERS.add(cn.name);
             if (read.isEmpty()) continue;
             if (mutates) for (String f : read) GUARD_MUTATORS.computeIfAbsent(f, k -> new java.util.TreeSet<>()).add(mn.name);
             if (!iface) GUARD_READS.computeIfAbsent(cn.name, k -> new java.util.TreeSet<>()).addAll(read);
@@ -476,6 +497,18 @@ public final class PackAnalyzer {
             }
         }
     }
+
+    /**
+     * Classes that guard their own state with synchronized: they are thread-aware, and adding MultiCore's lock to them (or
+     * to their fields' readers) can deadlock against their monitor (found 2026-11-25: Create Thrusters' ShipDockRegistry).
+     */
+    private static final Set<String> SELF_SYNC = new java.util.HashSet<>();
+
+    /** Classes whose own collections are changed while the game runs (by a method that is not startup code). */
+    private static final Set<String> MUTABLE_HOLDERS = new java.util.HashSet<>();
+    /** Class -> object-typed static fields its methods read; field -> its type. */
+    private static final Map<String, Set<String>> OBJECT_READS = new java.util.HashMap<>();
+    private static final Map<String, String> STATIC_TYPES = new java.util.HashMap<>();
 
     /** Class -> every type its code refers to (patching a class recomputes its frames, which loads these). */
     private static final Map<String, Set<String>> GUARD_REFS = new java.util.HashMap<>();
@@ -562,7 +595,7 @@ public final class PackAnalyzer {
         Set<String> fields = new java.util.TreeSet<>();
         GUARD_MUTATORS.forEach((field, methods) -> {
             String owner = field.substring(0, field.lastIndexOf('.'));
-            if (!GUARD_OWNERS.contains(owner) || owner.startsWith("com/multicore/")) return;
+            if (!GUARD_OWNERS.contains(owner) || owner.startsWith("com/multicore/") || SELF_SYNC.contains(owner)) return;
             for (String m : methods) {
                 if (!STARTUP_METHOD.matcher(m).matches()) {
                     fields.add(field);
@@ -572,15 +605,34 @@ public final class PackAnalyzer {
         });
         Set<String> classes = new java.util.TreeSet<>();
         GUARD_READS.forEach((cls, read) -> {
-            if (cls.startsWith("com/multicore/") || unsafeToPatch(cls)) return;
+            if (cls.startsWith("com/multicore/") || unsafeToPatch(cls) || SELF_SYNC.contains(cls)) return;
             for (String f : read) if (fields.contains(f)) { classes.add(cls); return; }
         });
         Files.writeString(outDir.resolve("guard-fields.txt"), String.join("\n", fields) + "\n");
         Files.writeString(outDir.resolve("guard-classes.txt"), String.join("\n", classes) + "\n");
+        // Singletons: a static field holding a mod object whose own collections change while the game runs. Their
+        // readers are listed with the field (the generator drops singletons MultiCore makes safe itself).
+        Set<String> singletons = new java.util.TreeSet<>();
+        Set<String> singletonFields = new java.util.HashSet<>();
+        STATIC_TYPES.forEach((field, type) -> {
+            String owner = field.substring(0, field.lastIndexOf('.'));
+            if (GUARD_OWNERS.contains(owner) && MUTABLE_HOLDERS.contains(type) && !owner.startsWith("com/multicore/")) {
+                singletons.add(field + " " + type);
+                singletonFields.add(field);
+            }
+        });
+        Files.writeString(outDir.resolve("guard-singletons.txt"), String.join("\n", singletons) + "\n");
+        Set<String> singletonReaders = new java.util.TreeSet<>();
+        OBJECT_READS.forEach((cls, read) -> {
+            if (cls.startsWith("com/multicore/") || unsafeToPatch(cls) || INTERFACES.contains(cls)) return;
+            for (String f : read) if (singletonFields.contains(f)) singletonReaders.add(cls + " " + f);
+        });
+        Files.writeString(outDir.resolve("guard-singleton-readers.txt"), String.join("\n", singletonReaders) + "\n");
+        System.out.println("Static guard: " + singletons.size() + " singletons, " + singletonReaders.size() + " reader entries");
         // Per-world state of mods (SavedData): shared by every region thread of that world.
         Set<String> savedData = new java.util.TreeSet<>();
         for (String cls : SUPERS.keySet()) {
-            if (cls.startsWith("com/multicore/") || INTERFACES.contains(cls) || unsafeToPatch(cls)) continue;
+            if (cls.startsWith("com/multicore/") || INTERFACES.contains(cls) || unsafeToPatch(cls) || SELF_SYNC.contains(cls)) continue;
             for (String c = cls; c != null; c = SUPERS.get(c)) {
                 if ("net/minecraft/world/level/saveddata/SavedData".equals(SUPERS.get(c))) {
                     savedData.add(cls);
@@ -588,7 +640,7 @@ public final class PackAnalyzer {
                 }
             }
         }
-        for (String cls : LEVEL_KEYED) if (!cls.startsWith("com/multicore/") && !unsafeToPatch(cls)) savedData.add(cls);
+        for (String cls : LEVEL_KEYED) if (!cls.startsWith("com/multicore/") && !unsafeToPatch(cls) && !SELF_SYNC.contains(cls)) savedData.add(cls);
         Files.writeString(outDir.resolve("guard-saveddata.txt"), String.join("\n", savedData) + "\n");
         System.out.println("Static guard: " + savedData.size() + " mod SavedData classes");
         System.out.println("Static guard: " + fields.size() + " shared static collections, read by " + classes.size() + " classes");

@@ -21,6 +21,7 @@ public final class Stats {
     public static final LongAdder CROSS_LEVEL_LOADS = new LongAdder();
     public static final LongAdder MOD_LOCK_ACQUIRES = new LongAdder();
     public static final LongAdder MOD_LOCK_WAIT_NANOS = new LongAdder();
+    public static final LongAdder MOD_LOCK_GIVE_UPS = new LongAdder();
     public static final LongAdder WORLD_PAUSES = new LongAdder();
     public static final LongAdder WORLD_PAUSE_WAIT_NANOS = new LongAdder();
     public static final LongAdder WORLD_PAUSE_TIMEOUTS = new LongAdder();

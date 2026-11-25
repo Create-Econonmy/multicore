@@ -557,9 +557,16 @@ public final class RegionTicker {
             } else {
                 Stats.REGION_EXCLUSIVE_TIMEOUTS.increment();
                 if (EXCLUSIVE_TIMEOUT_LOGGED.compareAndSet(false, true)) {
+                    StringBuilder others = new StringBuilder();
+                    for (RegionThread w : this.coordinator.regionWorkers) {
+                        if (w == self) continue;
+                        others.append(System.lineSeparator()).append(w.getName()).append(" (").append(w.getState()).append("):");
+                        StackTraceElement[] st = w.getStackTrace();
+                        for (int k = 0; k < Math.min(st.length, 30); k++) others.append(System.lineSeparator()).append("    at ").append(st[k]);
+                    }
                     MultiCore.LOGGER.warn("[MultiCore] {} could not pause the other region threads of {} within {} ms for a "
-                            + "cross-region access and went on without it. Please report this log.", self.getName(),
-                            this.level.dimension().location(), EXCLUSIVE_WAIT_MS, new Throwable("where it happened"));
+                            + "cross-region access and went on without it. Please report this log. The others:{}", self.getName(),
+                            this.level.dimension().location(), EXCLUSIVE_WAIT_MS, others, new Throwable("where it happened"));
                 }
             }
         }

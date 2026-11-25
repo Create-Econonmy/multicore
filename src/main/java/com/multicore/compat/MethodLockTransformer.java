@@ -96,6 +96,26 @@ public final class MethodLockTransformer {
         return wrappers.size();
     }
 
+    /** Every method that reads one of {@code fields} ("owner/Name.field", static or instance), with {@code enterMethod}. */
+    public static int wrapMethodsTouching(ClassNode node, java.util.Set<String> fields, String lockName, String enterMethod) {
+        if ((node.access & Opcodes.ACC_INTERFACE) != 0) return 0;
+        List<MethodNode> wrappers = new ArrayList<>();
+        for (MethodNode method : List.copyOf(node.methods)) {
+            if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE | Opcodes.ACC_BRIDGE)) != 0
+                    || method.name.startsWith("<") || method.name.startsWith(PREFIX)) {
+                continue;
+            }
+            boolean touches = false;
+            for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null && !touches; insn = insn.getNext()) {
+                touches = insn instanceof org.objectweb.asm.tree.FieldInsnNode f
+                        && (f.getOpcode() == Opcodes.GETFIELD || f.getOpcode() == Opcodes.GETSTATIC) && fields.contains(f.owner + "." + f.name);
+            }
+            if (touches) wrappers.add(wrap(node, method, lockName, enterMethod));
+        }
+        node.methods.addAll(wrappers);
+        return wrappers.size();
+    }
+
     private static boolean reads(MethodNode method, java.util.Set<String> fields) {
         for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
             if (insn instanceof org.objectweb.asm.tree.FieldInsnNode f && f.getOpcode() == Opcodes.GETSTATIC

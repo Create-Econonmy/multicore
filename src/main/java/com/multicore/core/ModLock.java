@@ -1,5 +1,7 @@
 package com.multicore.core;
 
+import com.multicore.MultiCore;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +38,26 @@ public final class ModLock {
     }
 
     public static void acquire(LockSource source) {
+        acquire(source, false);
+    }
+
+    private static final long MONITOR_CHECK_NANOS = 100_000_000L;
+    private static final java.util.concurrent.atomic.AtomicBoolean GAVE_UP_LOGGED = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** Does the current thread hold a Java monitor (a mod's synchronized block)? Slow: only after a long wait. */
+    private static boolean holdsMonitor() {
+        java.lang.management.ThreadInfo[] info = java.lang.management.ManagementFactory.getThreadMXBean()
+                .getThreadInfo(new long[] {Thread.currentThread().threadId()}, true, false);
+        return info.length > 0 && info[0] != null && info[0].getLockedMonitors().length > 0;
+    }
+
+    /**
+     * @param mayGiveUp for the extra locks MultiCore adds around shared state (the static guard, vanilla shared data):
+     *                  after 100 ms of waiting, a thread inside a mod's own synchronized block gives up and goes on without
+     *                  the lock, because the holder may be waiting for that same block (a deadlock no wait can end).
+     * @return true if the lock is held now
+     */
+    static boolean acquire(LockSource source, boolean mayGiveUp) {
         source.acquisitions.increment();
         Stats.MOD_LOCK_ACQUIRES.increment();
         if (!LOCK.tryLock()) {
@@ -60,9 +82,24 @@ public final class ModLock {
                 if (self != null) self.safe++;
                 try {
                     boolean reported = false;
+                    boolean checkedMonitors = false;
                     while (!LOCK.tryLock(100, TimeUnit.MICROSECONDS)) {
                         if (self != null) {
                             self.pollOwnTasks();
+                        }
+                        if (mayGiveUp && !checkedMonitors && System.nanoTime() - start > MONITOR_CHECK_NANOS) {
+                            checkedMonitors = true;
+                            if (holdsMonitor()) {
+                                Stats.MOD_LOCK_GIVE_UPS.increment();
+                                if (GAVE_UP_LOGGED.compareAndSet(false, true)) {
+                                    Thread owner = LOCK.holder();
+                                    MultiCore.LOGGER.warn("[MultiCore] {} waited 100 ms for the mod lock ({}) inside a mod's own synchronized "
+                                            + "code while {} holds it; going on without it to avoid a deadlock. Please report this log.",
+                                            Thread.currentThread().getName(), source, owner == null ? "nobody" : owner.getName(),
+                                            new Throwable("where it happened"));
+                                }
+                                return false;
+                            }
                         }
                         if (!reported && System.nanoTime() - start > REPORT_WAIT_NANOS) {
                             reported = true;
@@ -90,6 +127,7 @@ public final class ModLock {
             holdStart = System.nanoTime();
             holder = source;
         }
+        return true;
     }
 
     /** Someone has waited 10 s for the lock: say who holds it, what for, and where it is (once a minute at most). */
@@ -203,8 +241,7 @@ public final class ModLock {
      */
     public static boolean enterSharedState(LockSource source) {
         if ((Thread.currentThread() instanceof LevelThread && TickThreads.inParallelPhase()) || serverThreadLocks()) {
-            acquire(source);
-            return true;
+            return acquire(source, true);
         }
         return false;
     }

@@ -1,13 +1,34 @@
-MULTICORE SERVER 0.3.1 - SERVER INSTALL KIT  (mod id: multicore)
+MULTICORE SERVER 0.4.0 - SERVER INSTALL KIT  (mod id: multicore)
 ================================================================================
 NOT installed on the server. Everything here is staged only.
 
 WHAT IT DOES
 Each dimension (South, Multiworld's shop/north/war/creative, hub, nether, end)
-ticks on its own CPU thread instead of one after another. Mod code that has
-not been checked as thread-safe (that includes Create Economy Money, Ranks and
-the Launcher) still runs one at a time behind a shared lock, so those mods
-work exactly as before.
+ticks on CPU threads instead of one after another, and a busy world is split
+over as many region threads as it needs to keep 20 TPS.
+
+NEW IN 0.4.0 (big change; switch it on in stages, see INSTALL-FOR-AI-AGENT.md):
+- EVERY MOD UNLOCKED (unlockAllMods = true): all mods' machines and event
+  listeners run in parallel, Create's factories included. What mods share is
+  made safe instead: a "static guard" (generated from this exact mod list)
+  locks only the code that uses shared mod state; code that reaches into
+  another dimension (Create logistics, Ender Transmission) pauses the other
+  threads for that moment; a dozen mods found unsafe were patched. Mods added
+  LATER are not covered by the guard until MultiCore is rebuilt for them.
+- NO GAME WORK ON THE MAIN THREAD: players' ticks and their world packets
+  (moving, mining, placing, clicking) and the level tick events run on the
+  world's own thread. Chat, commands, logins and saving stay on the main one.
+- REGION THREADS AS NEEDED (autoScale): each world starts on a shared thread
+  and only gets region threads while its tick is over 40 ms, then gives them
+  back. Quiet worlds no longer move to the main thread (idleMs = 0).
+- Tested (2026-11-25, local test servers only): full 210-mod pack, 46/46
+  GameTests on 6 runs in a row (players, tpa/home/pay, Create logistics and a
+  train, chests across regions and dimensions, auto-scaling, a fuzz test of
+  every block entity and entity in every dimension). 5 of the 6 logs had no
+  MultiCore warning at all; one had a 2 s stall from a deadlock MultiCore
+  avoided (now cut to 100 ms). A real game client and real players have NOT
+  been tested.
+- To go back to 0.3 behaviour without removing it: unlockAllMods = false.
 
 NEW IN 0.3.1 (safety fixes, nothing to set up):
 - Region threads: the empty squares around a region now belong to it. Before,
@@ -35,7 +56,7 @@ Server-side only. Players do NOT need it, and it must NOT go in the modpack or
 the launcher's mirrorMods list.
 
 FILES
-  mods/multicore-0.3.1.jar        the mod
+  mods/multicore-0.4.0.jar        the mod
   config/multicore-common.toml    default config (created on first start anyway)
 
 TESTED WITH THE NEW MODS
@@ -46,7 +67,7 @@ TESTED WITH THE NEW MODS
   pickup) takes MultiCore's mod lock.
 
 INSTALL (server stopped; take a backup of the world first)
-1. Copy mods/multicore-0.3.1.jar into the server's mods/.
+1. Copy mods/multicore-0.4.0.jar into the server's mods/.
 2. Leave dimthread installed for the first start. While its gamerule
    dimthread_active is true (the default), MultiCore stands by and does
    nothing, so the first start is the same as today.
@@ -83,7 +104,7 @@ If MultiCore detects a threading error it logs it and switches itself to
 single-thread ticking for the rest of the session (fallbackToSerialOnError).
 
 REMOVING IT
-  Stop the server and delete mods/multicore-0.3.1.jar. It stores nothing in
+  Stop the server and delete mods/multicore-0.4.0.jar. It stores nothing in
   the world.
 
 ONCE IT HAS RUN WELL FOR A FEW DAYS
@@ -154,4 +175,4 @@ TEST NOTES (2026-11-15, local test server only)
     (NoClassDefFoundError dan200/computercraft/...), MultiCore on or off.
     Electronic Warfare was left out of the test.
 
-jar sha256 (multicore-0.3.1.jar): e713fca0ccf15c5561dea98ea7b6cf858e913b8210106d6f04fda51cc6dccb03
+jar sha256 (multicore-0.4.0.jar): ef0021ef7f00eec3e498dd8d6a5d38c3ec3eb81fba1bc8ba8642036af839c13f

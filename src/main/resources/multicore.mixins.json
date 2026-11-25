@@ -12,6 +12,7 @@
     "compat.create.LogisticsPauseCarrier",
     "compat.create.ShapeCachesMixin",
     "compat.create.SharedStateLockCarrier",
+    "compat.createendertransmission.ChannelPauseCarrier",
     "compat.createthreadedtrains.GlobalRailwayManagerMixin",
     "compat.fallingtree.BlockCachesMixin",
     "compat.openpartiesandclaims.ClaimCaptureCarrier",

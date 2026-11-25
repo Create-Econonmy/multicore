@@ -39,7 +39,9 @@ import net.neoforged.neoforge.event.EventHooks;
 public final class ParallelTicker {
     private static final ParallelTicker INSTANCE = new ParallelTicker();
     private static final long CHECK_INTERVAL_NANOS = 250_000_000L;
-    private static final long DEADLOCK_CHECK_AFTER_NANOS = 2_000_000_000L;
+    // A last resort: since 0.4.0 server.submit() and executeBlocking() run inline on tick threads, so a real case is rare,
+    // while a slow disk read (POI data while many chunks load) also blocks on a future and must not trigger it.
+    private static final long DEADLOCK_CHECK_AFTER_NANOS = 20_000_000_000L;
 
     /** Dimension threads; thread i runs the dimensions of group i (see {@link ThreadGroups}). */
     private final List<LevelThread> pool = new ArrayList<>();

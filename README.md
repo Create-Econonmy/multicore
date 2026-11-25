@@ -152,61 +152,40 @@ can it be split. `/multicore status` shows the last split per dimension ("entiti
 What it gains depends on what ticks. Vanilla mobs, item entities, hoppers, furnaces and redstone run fully in parallel
 across regions; Create and other mods outside `regionSafeMods` take turns on the mod lock, as they do between dimensions.
 
-## Create in parallel (experimental, off by default)
+## Every mod unlocked (default since 0.4.0)
 
-**Off by default.** Found on 2026-11-24: with Create's machines unlocked, a locked logistics hub (stock ticker,
-factory gauge, packager) in one dimension or region can pull items out of a vault or chest in another, while that
-vault's own belts, funnels and arms (unlocked) use it on their own thread. Nothing serializes the two, so items can be
-lost or duplicated; the tests do not catch it reliably. Until that is solved, Create stays under the mod lock as it
-always was. What follows describes the experimental mode (`threadSafeContent = ["create"]`, `regionSafeContent =
-["create"]`).
+`compatibility.unlockAllMods = true`: every mod's block entities, entities, blocks and event listeners run in parallel
+on dimension and region threads. Create's machines (belts, shafts, presses, mixers, fans, arms, deployers, fluids,
+contraptions...) are among them, so factories in different regions and dimensions run at the same time.
 
-With it on, Create's block entities, entities and blocks (belts,
-shafts, fans, presses, mixers, fluids, contraptions, drills, deployers, arms...) run on several dimension and region
-threads at once; their state lives in the machine and its neighbours, which share one region. What every machine
-shares is guarded by MultiCore:
+How the races found on the way are handled:
 
-| Shared by many machines | What MultiCore does |
+| Found (2026-11-24/25, full pack unlocked) | Fix |
 |---|---|
-| Stress networks (`TorquePropagator`, `KineticNetwork`), redstone link networks (`RedstoneLinkNetworkHandler`), the global logistics manager | Every method holds the mod lock (named `shared ...` in `/multicore locks`), also when the caller itself runs without it. |
-| Brass tunnel scratch collections, belt and chute shape caches, the belt "upright" cache | Per-thread, concurrent or synchronized. |
-| Create's per-world maps (`WorldAttached` of HashMaps and HashSets: pipe interfaces, minecarts, contraptions) | Synchronized. |
-| Trains (tracks, stations, signals, bogeys, controls, carriages), logistics (packagers, stock tickers, frogports, factory gauges, stock links, table cloths), display links (they read trains), toolboxes, cart assemblers | Listed in `compatibility.lockedContent`: they keep holding the mod lock, as before, because their networks span regions and dimensions. |
-| Create's event listeners | Unchanged: they still hold the mod lock unless listed in `threadSafeListeners` / `regionSafeListeners`. |
+| A stock ticker or packager pulling from a vault in another region or dimension while the vault's own belts used it | Create's logistics requests and any read of a block entity in another dimension pause the world (see above). |
+| FallingTree's block caches (HashMap CME) | Concurrent maps. |
+| Supplementaries' hourglass times (AIOOBE) | The class takes the lock. |
+| Steam 'n' Rails crossings walking Create's track graph while Create changed it | Create's track graph, track propagation and railway manager take the lock. |
+| NeoForge's fake players (HashMap CME, one fake player steered by two threads) | One set of fake players per thread. |
+| Ritchie's Projectile Lib's chunk manager (a corrupted set looping forever), Simulated's magnet map, Tom's Storage's cable networks, and every other shared static collection, mod saved data and world-keyed map the analyzer finds | The static guard. |
+| Create: Ender Transmission's channel lists (they hold machines and inventories anywhere) | Using a channel pauses the world. |
+| Create Threaded Trains' worker ticking trains while the server thread changed the train list | The worker and the server thread never overlap. |
+| A mod's own `synchronized` code waiting for MultiCore's lock while the lock's holder waited for that code (Create Thrusters) | Classes that synchronize themselves are left out of the static guard, and a guard lock waited for 100 ms inside synchronized code is skipped (logged once). |
 
-Remove `"create"` from `threadSafeContent` (and `regionSafeContent`) to put all of Create back under the lock.
-`/multicore locks` shows what still takes the lock. `CreateTests.machinesInManyRegionsRunWithoutTheModLock` checks
-motors driving shafts and redstone links in four regions at once.
+What still holds the lock (`compatibility.lockedContent` / `lockedListeners`): Create's trains, stations, signals,
+bogeys and logistics machines (packagers, stock tickers, frogports, factory gauges, table cloths, display links,
+toolboxes, cart assemblers), Steam 'n' Rails, and the level tick event listeners. Remove entries to unlock them too.
+`unlockAllMods = false` goes back to 0.3 (every mod but vanilla and NeoForge on the lock).
 
-## Unlock every mod (experimental, not recommended)
+## Known open issues (2026-11-25)
 
-`compatibility.unlockAllMods = true` makes every mod's block entities, entities, blocks and event listeners run in
-parallel without the mod lock (default off). `lockedContent` / `lockedListeners` still hold the lock, as do the locks
-MultiCore adds itself for Sable, KubeJS and Create's shared managers.
-
-It was run on the 208-mod test pack on 2026-11-24, and it is **not safe there**:
-
-| Found | Where |
-|---|---|
-| `ConcurrentModificationException` in an unsynchronized `HashMap.computeIfAbsent` cache | FallingTree (`isLeafBlock`, from its neighbour-update listener) |
-| `ArrayIndexOutOfBoundsException` in a shared times list | Supplementaries (`HourglassTimesManager`) |
-| `ConcurrentModificationException` iterating Create's track graph from a block that is not Create's | Railways (`GenericCrossingBlock.tick` calling `TrackPropagator`); with Create's own listeners unlocked, a Create track tick hit the same crash and the whole test server went down |
-| Block drops ending up in the wrong dimension | a test of drops caught in the other dimension's thread |
-
-and it gains nothing worth it: the 3-dimension benchmark ran 2.33x faster than one thread with every mod unlocked and
-2.59x with only Create unlocked (the lock is not the bottleneck; the mods' listeners cost microseconds). The defaults
-(every mod but vanilla and NeoForge on the lock) are what the pack was tested with.
-
-## Known open issues (2026-11-24)
-
-- Create logistics reaching a vault or chest in **another dimension** is not paused (dimension threads have no
-  cross-dimension pause, only region threads do); a vanilla hopper on that vault, ticking on its own dimension thread,
-  could race the request. Create itself is on the mod lock, so Create's own machines cannot.
-- In the small Create-only test pack (`run/gametest-create`, 512 MB) `blockDropsStayInTheirDimension` sometimes sees no
-  nether drops at all (0 item entities right after breaking, on the nether's own thread). Also happens with 0.3.0;
-  never seen in the full pack. The test now logs what it sees; not explained yet.
-- `idleDimensionJoinsTheMainThreadAndLeavesWhenBusy`, `spawnsRemovalsAndMovesOnRegionThreadsAreApplied` and
-  `packageRequestFromAnotherRegion` fail now and then in that small pack (also with 0.3.0).
+- The static guard is generated for this pack (`tools/generate-static-guard.py` from the pack analyzer). A mod added
+  later is not covered until the generator is run again and MultiCore rebuilt; until then it runs unlocked and
+  unguarded (switch `unlockAllMods` off, or add the mod to `lockedContent`, if in doubt).
+- The analyzer cannot see every kind of shared state: objects shared through fields of other objects (a singleton's
+  maps, like Ender Transmission's channels) are found by running the pack, not by the analyzer.
+- A world pause or a region pause that cannot stop another thread within 2 s goes on without it (logged once).
+- In the small Create-only test pack, nether drops sometimes vanish (also in 0.3.0, never in the full pack).
 
 ## Commands (op level 3)
 
