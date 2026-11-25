@@ -57,6 +57,10 @@ neoForge {
             if (project.hasProperty('skipFuzz')) {
                 systemProperty 'multicore.skipFuzz', 'true'
             }
+            // -PsoakRounds=N: add N soak rounds (SoakTests): trains, logistics, machines and the chaos test at once.
+            if (project.hasProperty('soakRounds')) {
+                systemProperty 'multicore.soakRounds', project.property('soakRounds')
+            }
         }
     }
 

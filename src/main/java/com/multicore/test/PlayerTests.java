@@ -67,7 +67,7 @@ public final class PlayerTests {
     private static final Map<UUID, String> TICKED_ON = new ConcurrentHashMap<>();
     private static final AtomicBoolean LISTENING = new AtomicBoolean();
     /** Simulated players online; their connection's part of the tick is run for them (see {@link #listen}). */
-    private static final List<ServerPlayer> ONLINE = new CopyOnWriteArrayList<>();
+    static final List<ServerPlayer> ONLINE = new CopyOnWriteArrayList<>();
     /** Where each simulated player belongs right after login, and until which server tick it is held there. */
     private static final Map<UUID, BlockPos> SPOT = new ConcurrentHashMap<>();
     private static final Map<UUID, Integer> HOLD_UNTIL = new ConcurrentHashMap<>();
@@ -103,7 +103,7 @@ public final class PlayerTests {
     // ---- setting up ----
 
     /** Joins a simulated player through the player list (login events and all), standing on a stone platform at {@code at}. */
-    private static ServerPlayer join(ServerLevel level, String name, BlockPos at) {
+    static ServerPlayer join(ServerLevel level, String name, BlockPos at) {
         MinecraftServer server = level.getServer();
         GameProfile profile = new GameProfile(UUID.nameUUIDFromBytes(("multicore-test:" + name).getBytes(StandardCharsets.UTF_8)), name);
         CommonListenerCookie cookie = CommonListenerCookie.createInitial(profile, false);
@@ -169,7 +169,7 @@ public final class PlayerTests {
         });
     }
 
-    private static void leave(ServerPlayer player) {
+    static void leave(ServerPlayer player) {
         ONLINE.remove(player);
         SPOT.remove(player.getUUID());
         HOLD_UNTIL.remove(player.getUUID());
