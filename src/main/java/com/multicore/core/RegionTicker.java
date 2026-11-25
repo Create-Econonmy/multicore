@@ -310,7 +310,7 @@ public final class RegionTicker {
         final java.util.concurrent.atomic.LongAdder busyNanos = new java.util.concurrent.atomic.LongAdder();
         @Nullable
         volatile Throwable error;
-        /** Square key -> job owning it (-1: no job). */
+        /** Square key -> job owning it (-1: no job, SHARED: in the border ring of more than one job). */
         final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap squareJob = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
 
         Split(ServerLevel level, LevelThread coordinator, RegionPlan plan, int shift, List<Object> items, Consumer<Object> action, int workers) {
@@ -327,7 +327,36 @@ public final class RegionTicker {
             for (int j = 0; j < plan.jobSquares.length; j++) {
                 for (long key : plan.jobSquares[j]) this.squareJob.put(key, j);
             }
+            // A job also owns the empty squares around its own: what its entities and machines use (a chest just across a
+            // square edge) lies there. A border square two jobs touch belongs to neither alone.
+            for (int j = 0; j < plan.jobSquares.length; j++) {
+                for (long key : plan.jobSquares[j]) {
+                    int sx = (int) (key >> 32);
+                    int sz = (int) key;
+                    for (int dx = -1; dx <= 1; dx++) {
+                        for (int dz = -1; dz <= 1; dz++) {
+                            long ring = RegionPlan.squareKey(sx + dx, sz + dz);
+                            int owner = this.squareJob.get(ring);
+                            if (owner == -1) {
+                                this.squareJob.put(ring, j);
+                            } else if (owner != j && !this.occupied(ring)) {
+                                this.squareJob.put(ring, SHARED);
+                            }
+                        }
+                    }
+                }
+            }
         }
+
+        /** Is the square one with something ticking in it (not just a border square)? */
+        private boolean occupied(long key) {
+            for (long[] squares : this.plan.jobSquares) {
+                if (java.util.Arrays.binarySearch(squares, key) >= 0) return true;
+            }
+            return false;
+        }
+
+        static final int SHARED = -2;
 
         /** On a region thread: take jobs until none are left. */
         void work(RegionThread self) {
@@ -623,6 +652,19 @@ public final class RegionTicker {
     public static void crossRegion(int blockX, int blockZ) {
         RegionThread t = RegionThread.working();
         if (t == null || t.exclusive || !t.isForeign(blockX >> 4, blockZ >> 4)) {
+            return;
+        }
+        t.split.beginExclusive(t);
+    }
+
+    /**
+     * Code on a region thread is about to use something that may reach any part of the world through references it
+     * keeps (Create's logistics: a request or a stock summary pulls from vaults and chests of the whole network). Pause
+     * every other region thread for the rest of the current item, whether or not a foreign block is read on the way.
+     */
+    public static void pauseOtherRegions() {
+        RegionThread t = RegionThread.working();
+        if (t == null || t.exclusive) {
             return;
         }
         t.split.beginExclusive(t);

@@ -79,6 +79,10 @@ public final class MultiCoreMixinPlugin implements IMixinConfigPlugin {
         } else if (mixinClassName.endsWith(".create.SharedStateLockCarrier")) {
             int wrapped = MethodLockTransformer.wrapAllMethods(targetClass, "create " + targetClassName.substring(targetClassName.lastIndexOf('.') + 1));
             MultiCore.LOGGER.info("[MultiCore] {}: {} methods take the mod lock (state shared by every machine)", targetClassName, wrapped);
+        } else if (mixinClassName.endsWith(".create.LogisticsPauseCarrier")) {
+            int wrapped = MethodLockTransformer.wrapAllMethods(targetClass,
+                    "create " + targetClassName.substring(targetClassName.lastIndexOf('.') + 1), "enterSharedPausing");
+            MultiCore.LOGGER.info("[MultiCore] {}: {} methods take the mod lock and pause the other region threads", targetClassName, wrapped);
         } else if (mixinClassName.endsWith(".create.BrassTunnelStaticsCarrier")) {
             int rewritten = ThreadLocalStaticsTransformer.rewrite(targetClass, ThreadStatics.CREATE_BRASS_TUNNEL, CREATE_BRASS_TUNNEL_FIELDS);
             MultiCore.LOGGER.info("[MultiCore] {}: {} uses of the brass tunnel's scratch collections made per-thread", targetClassName, rewritten);

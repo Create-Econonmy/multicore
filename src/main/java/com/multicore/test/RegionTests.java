@@ -299,13 +299,31 @@ public final class RegionTests {
      */
     @GameTest(template = "empty", batch = "regions_crossregion", timeoutTicks = 400)
     public static void pullingFromAChestInAnotherRegionLosesNothing(GameTestHelper helper) {
+        pullFromAnotherRegion(helper, false);
+    }
+
+    /**
+     * The same with the chest in the empty square next to region B's pigs (just across a square edge): nothing ticks in
+     * that square, but it is still region B's part of the world, so region A reaching into it must pause region B.
+     */
+    @GameTest(template = "empty", batch = "regions_crossregion_edge", timeoutTicks = 400)
+    public static void pullingFromAChestAcrossASquareEdgeLosesNothing(GameTestHelper helper) {
+        pullFromAnotherRegion(helper, true);
+    }
+
+    private static void pullFromAnotherRegion(GameTestHelper helper, boolean chestAcrossEdge) {
         listen();
         ServerLevel level = helper.getLevel();
         BlockPos o = helper.absolutePos(BlockPos.ZERO);
-        int ax = o.getX() + 11000, bx = o.getX() - 11000, z = o.getZ() - 4000;
+        int squareBlocks = 16 * com.multicore.core.RegionTicker.squareChunks();
+        int ax = o.getX() + 11000, z = o.getZ() - 4000;
+        // Across the edge: the pigs fill a 6x4 patch at the end of their square and the chest sits 3 blocks into the next one.
+        int bx = chestAcrossEdge ? Math.floorDiv(o.getX() - 11000, squareBlocks) * squareBlocks + squareBlocks - 8 : o.getX() - 11000;
         List<Pig> a = pigs(level, ax, z, 24);
         List<Pig> b = pigs(level, bx, z, 24);
-        BlockPos chestPos = new BlockPos(bx, 150, z + 8);
+        BlockPos chestPos = chestAcrossEdge ? new BlockPos(Math.floorDiv(bx, squareBlocks) * squareBlocks + squareBlocks + 2, 150, z + 2)
+                : new BlockPos(bx, 150, z + 8);
+        if (chestAcrossEdge) forceArea(level, chestPos.getX(), chestPos.getZ(), true);
         level.setBlock(chestPos, Blocks.CHEST.defaultBlockState(), 3);
         AtomicInteger inserted = new AtomicInteger();
         AtomicInteger pulled = new AtomicInteger();

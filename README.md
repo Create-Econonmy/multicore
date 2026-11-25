@@ -94,7 +94,8 @@ with fewer than `minEntities` (32) entities or `minBlockEntities` (64) block ent
 | Chunks: reading | Loaded chunks are read directly (the chunk map is copy-on-write). |
 | Chunks: loading one | The region thread waits; its dimension thread pauses every region thread (a read-write lock: region threads hold the read side while ticking one entity or block entity) and runs the chunk tasks. |
 | Points of interest (villager beds, job sites), the raid list | Synchronized. |
-| Reaching into another region's part of the world (a Create stock ticker, factory gauge or packager using a vault far away, a long teleport) | Reading a block entity or changing a block in a square that belongs to another region thread pauses every other region thread until that entity or block entity tick is done, exactly like one thread. `/multicore status` counts these pauses. |
+| Reaching into another region's part of the world (a Create stock ticker, factory gauge or packager using a vault far away, a long teleport) | Reading a block entity or changing a block outside the thread's own part of the world pauses every other region thread until that entity or block entity tick is done, exactly like one thread. A region's own part is its squares **and the empty squares around them** (where its chests and vaults often are); a border square two regions touch, or a square nobody ticks in, belongs to no one, so any region reaching into it pauses the rest. (Before 0.3.1 those border squares belonged to no one but did not pause: an access from another region raced the owner. `pullingFromAChestAcrossASquareEdgeLosesNothing` covers it.) `/multicore status` counts these pauses. |
+| Create's logistics (stock tickers, factory gauges, redstone requesters, packagers) | They reach vaults and chests through references they keep, not world lookups, so the block-read check above cannot see them. Every method of `LogisticsManager` and `GlobalLogisticsManager` takes the mod lock and, on a region thread, pauses the other region threads for the rest of the tick item. |
 | Mod code | Holds the mod lock unless the mod is in `regionSafeMods` (default: minecraft, neoforge, multicore). Being in `threadSafeMods` is not enough: a mod may keep state per dimension. Single listeners can be listed in `regionSafeListeners`. |
 | A threading error in a region thread anyway | Logged; region threading switches off for the session, dimension threads keep running. |
 
@@ -167,6 +168,17 @@ It was run on the 208-mod test pack on 2026-11-24, and it is **not safe there**:
 and it gains nothing worth it: the 3-dimension benchmark ran 2.33x faster than one thread with every mod unlocked and
 2.59x with only Create unlocked (the lock is not the bottleneck; the mods' listeners cost microseconds). The defaults
 (every mod but vanilla and NeoForge on the lock) are what the pack was tested with.
+
+## Known open issues (2026-11-24)
+
+- Create logistics reaching a vault or chest in **another dimension** is not paused (dimension threads have no
+  cross-dimension pause, only region threads do); a vanilla hopper on that vault, ticking on its own dimension thread,
+  could race the request. Create itself is on the mod lock, so Create's own machines cannot.
+- In the small Create-only test pack (`run/gametest-create`, 512 MB) `blockDropsStayInTheirDimension` sometimes sees no
+  nether drops at all (0 item entities right after breaking, on the nether's own thread). Also happens with 0.3.0;
+  never seen in the full pack. The test now logs what it sees; not explained yet.
+- `idleDimensionJoinsTheMainThreadAndLeavesWhenBusy`, `spawnsRemovalsAndMovesOnRegionThreadsAreApplied` and
+  `packageRequestFromAnotherRegion` fail now and then in that small pack (also with 0.3.0).
 
 ## Commands (op level 3)
 

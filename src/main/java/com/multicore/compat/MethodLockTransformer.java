@@ -54,13 +54,18 @@ public final class MethodLockTransformer {
      * Static initialisers and synthetic lambdas are left alone; lambdas run inside a locked caller anyway.
      */
     public static int wrapAllMethods(ClassNode node, String lockName) {
+        return wrapAllMethods(node, lockName, "enterShared");
+    }
+
+    /** {@link #wrapAllMethods(ClassNode, String)} with another {@code ModLock} entry ("enterSharedPausing"). */
+    public static int wrapAllMethods(ClassNode node, String lockName, String enterMethod) {
         List<MethodNode> wrappers = new ArrayList<>();
         for (MethodNode method : node.methods) {
             if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE | Opcodes.ACC_SYNTHETIC | Opcodes.ACC_BRIDGE)) != 0
                     || method.name.startsWith("<") || method.name.startsWith(PREFIX)) {
                 continue;
             }
-            wrappers.add(wrap(node, method, lockName, "enterShared"));
+            wrappers.add(wrap(node, method, lockName, enterMethod));
         }
         node.methods.addAll(wrappers);
         return wrappers.size();

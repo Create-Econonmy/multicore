@@ -5,13 +5,6 @@
 	#Dimensions that always tick on the main server thread, after the parallel phase.
 	#Example: ["minecraft:the_end", "multiworld:shop"]
 	serialDimensions = []
-	#If a dimension thread throws a threading error (ConcurrentModificationException and similar),
-	#log it, switch MultiCore off for the rest of the session and keep the server running where possible.
-	fallbackToSerialOnError = true
-	#Log a warning with thread dumps when the parallel phase takes longer than this (milliseconds).
-	# Default: 10000
-	# Range: 500 ~ 600000
-	slowPhaseWarnMs = 10000
 	#At most this many dimension threads (0 = the CPU's logical cores minus 2, at least 2).
 	# Default: 0
 	# Range: 0 ~ 256
@@ -29,25 +22,13 @@
 	#dimensions are packed onto other threads), so a single dimension can be given its own thread.
 	#Example: ["minecraft:the_nether, minecraft:the_end, multiworld:hub"]
 	threadGroups = []
-
-[compatibility]
-	#Code from mods that are not in threadSafeMods (their block entities, entities, block ticks
-	#and event listeners) never runs on two dimension threads at the same time.
-	#Vanilla content and thread-safe mods still run fully in parallel.
-	#Turning this off is faster but only safe if every mod is thread-safe.
-	serializeUnsafeMods = true
-	#Mod ids whose content may run on several dimension threads at once.
-	#Only add a mod after checking it keeps no shared state between dimensions.
-	threadSafeMods = ["minecraft", "neoforge", "multicore"]
-	#Single event listeners that may run on several dimension threads at once, as "modid:EventName"
-	#(nested events with $, e.g. "curios:EntityTickEvent$Post"). /multicore locks shows the busiest ones.
-	#Only add a listener after checking it only touches the entity or level it is given.
-	threadSafeListeners = ["create:EntityTickEvent$Pre", "create:LivingBreatheEvent", "citadel:EntityTickEvent$Post", "fluid:EntityTickEvent$Pre", "blocksyouneed_luna:EntityTickEvent$Pre"]
-	#When code on one dimension thread moves an entity into, or spawns an entity in, another dimension,
-	#do it at the end of the tick on the main thread instead of immediately.
-	deferCrossDimensionWrites = true
-	#Log the first time each mod reaches into another dimension from a dimension thread (with a stack trace).
-	logCrossDimensionAccess = true
+	#If a dimension thread throws a threading error (ConcurrentModificationException and similar),
+	#log it, switch MultiCore off for the rest of the session and keep the server running where possible.
+	fallbackToSerialOnError = true
+	#Log a warning with thread dumps when the parallel phase takes longer than this (milliseconds).
+	# Default: 10000
+	# Range: 500 ~ 600000
+	slowPhaseWarnMs = 10000
 
 [autoAdjust]
 	#Adjust the regions (one per dimension) to the load. Nothing changes while the server keeps up:
@@ -70,7 +51,12 @@
 	#50 ms = TPS under 20.
 	# Default: 50.0
 	# Range: 0.0 ~ 1000.0
-	loadMs = 10.0
+	loadMs = 50.0
+	#Auto-adjust only acts after the server has been overloaded this long in a row (seconds,
+	#checked every 5 seconds).
+	# Default: 30
+	# Range: 5 ~ 3600
+	loadSeconds = 30
 	#Under load, parallel ticking must be at least this many times faster than one thread.
 	#1.0 never falls back.
 	# Default: 1.05
@@ -80,11 +66,47 @@
 	# Default: 10
 	# Range: 1 ~ 60
 	retryMinutes = 10
-	#Auto-adjust only acts after the server has been overloaded this long in a row (seconds,
-	#checked every 5 seconds).
-	# Default: 30
-	# Range: 5 ~ 3600
-	loadSeconds = 30
+
+[compatibility]
+	#Code from mods that are not in threadSafeMods (their block entities, entities, block ticks
+	#and event listeners) never runs on two dimension threads at the same time.
+	#Vanilla content and thread-safe mods still run fully in parallel.
+	#Turning this off is faster but only safe if every mod is thread-safe.
+	serializeUnsafeMods = true
+	#Mod ids whose content may run on several dimension threads at once.
+	#Only add a mod after checking it keeps no shared state between dimensions.
+	threadSafeMods = ["minecraft", "neoforge", "multicore"]
+	#Treat every mod as thread-safe: the machines (block entities, entities, blocks) AND the event listeners of all
+	#mods run in parallel on dimension threads and region threads, without the mod lock. Content in lockedContent
+	#still holds the lock, and the locks MultiCore adds for mods that need them (Sable's physics engine, KubeJS,
+	#Create's shared managers, per-thread flags) stay in place. Fastest, but any mod that keeps global state without
+	#knowing about threads can corrupt it; not tested with the whole pack. Switch it off again if anything odd shows up.
+	#Add a mod's content to lockedContent ("modid:*") to keep just that mod under the lock.
+	unlockAllMods = false
+	#Event listeners ("modid:EventName", or "modid:*" for all of a mod's) that always hold the mod lock, even with
+	#unlockAllMods. Found by running the whole pack unlocked: these keep unsynchronized caches.
+	lockedListeners = ["fallingtree:*"]
+	#Mod ids whose block entities, entities and blocks may run on several dimension threads at once, while the
+	#mod's event listeners still hold the mod lock (unless listed in threadSafeListeners). Content listed in
+	#lockedContent still holds the lock. EXPERIMENTAL, empty by default. ["create"] runs Create's machines in
+	#parallel (the few things every machine shares are made safe by MultiCore), but a locked logistics hub (stock
+	#ticker, packager) can then pull from a vault or chest in another dimension or region while that vault's own
+	#unlocked belts and funnels use it on their own thread: items may be lost or duplicated. Not for a live server.
+	threadSafeContent = []
+	#Block entity, entity and block ids ("modid:path", * matches anything) that always hold the mod lock, even
+	#when their mod is in threadSafeContent. The defaults are the parts of Create that share objects across the
+	#whole world: trains (tracks, stations, signals, bogeys), logistics (packagers, stock tickers, frogports,
+	#factory gauges, stock links), display links (they read trains), toolboxes and cart assemblers.
+	lockedContent = ["create:*track*", "create:*signal*", "create:*bogey*", "create:*station*", "create:controls", "create:*train*", "create:carriage_contraption", "create:cart_assembler", "create:packager", "create:repackager", "create:package_frogport", "create:package_postbox", "create:packager_link", "create:stock_ticker", "create:redstone_requester", "create:factory_panel", "create:table_cloth", "create:display_link", "create:toolbox", "railways:*", "supplementaries:hourglass"]
+	#Single event listeners that may run on several dimension threads at once, as "modid:EventName"
+	#(nested events with $, e.g. "curios:EntityTickEvent$Post"). /multicore locks shows the busiest ones.
+	#Only add a listener after checking it only touches the entity or level it is given.
+	threadSafeListeners = ["create:EntityTickEvent$Pre", "create:LivingBreatheEvent", "citadel:EntityTickEvent$Post", "fluid:EntityTickEvent$Pre", "blocksyouneed_luna:EntityTickEvent$Pre"]
+	#When code on one dimension thread moves an entity into, or spawns an entity in, another dimension,
+	#do it at the end of the tick on the main thread instead of immediately.
+	deferCrossDimensionWrites = true
+	#Log the first time each mod reaches into another dimension from a dimension thread (with a stack trace).
+	logCrossDimensionAccess = true
 
 [regions]
 	#Region threading: one busy dimension ticked by several threads at once (like Folia).
@@ -110,11 +132,18 @@
 	# Default: 64
 	# Range: 0 ~ 1000000
 	minBlockEntities = 64
+	#Time every split dimension both ways (one thread vs region threads, per entity and per block entity) and only
+	#split while the split is clearly faster. Worlds full of mod machines (Create) run all their code under the one
+	#mod lock, so splitting them is slower than one thread; those fall back to one thread and retry later.
+	onlyWhenFaster = true
 	#Dimensions that are never split, e.g. ["minecraft:the_end"].
 	excludedDimensions = []
 	#Mod ids whose code may run on several region threads of the same dimension at once. Code of every other mod
 	#(even threadSafeMods) holds the mod lock on a region thread: a mod may keep state per dimension.
 	regionSafeMods = ["minecraft", "neoforge", "multicore"]
+	#Mods whose block entities, entities and blocks (see threadSafeContent) may run on several region threads of
+	#the same dimension at once. EXPERIMENTAL, empty by default; see threadSafeContent for why.
+	regionSafeContent = []
 	#Single event listeners that may run on several region threads of one dimension at once ("modid:EventName").
 	#The defaults only touch the entity they are given.
 	regionSafeListeners = ["create:EntityTickEvent$Pre", "create:LivingBreatheEvent", "citadel:EntityTickEvent$Post"]

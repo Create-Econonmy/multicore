@@ -1,4 +1,4 @@
-MULTICORE SERVER 0.3.0 - SERVER INSTALL KIT  (mod id: multicore)
+MULTICORE SERVER 0.3.1 - SERVER INSTALL KIT  (mod id: multicore)
 ================================================================================
 NOT installed on the server. Everything here is staged only.
 
@@ -8,6 +8,21 @@ ticks on its own CPU thread instead of one after another. Mod code that has
 not been checked as thread-safe (that includes Create Economy Money, Ranks and
 the Launcher) still runs one at a time behind a shared lock, so those mods
 work exactly as before.
+
+NEW IN 0.3.1 (safety fixes, nothing to set up):
+- Region threads: the empty squares around a region now belong to it. Before,
+  a chest or vault just across a square edge from what uses it belonged to no
+  region, and another region reaching into it (a Create stock ticker far away)
+  did not pause the owner: items could be lost or duplicated. Fixed and tested.
+- Create logistics (stock tickers, factory gauges, packagers, redstone
+  requesters) now pause the other regions while they reach into vaults.
+- Create's shared stress / redstone-link networks, belt and chute caches and
+  brass tunnel scratch lists are made thread-safe (Create itself still runs
+  behind the mod lock, as in 0.3.0).
+- Optional, OFF by default and not recommended: threadSafeContent /
+  regionSafeContent (run Create's machines without the lock) and unlockAllMods
+  (every mod). Both were tested on the full pack and found unsafe; see README.
+- A stalled shutdown now logs a thread dump.
 
 NEW IN 0.3.0: REGION THREADS. A busy world (South) is split further: its
 entities and block entities are grouped into regions at least 128 blocks
@@ -20,7 +35,7 @@ Server-side only. Players do NOT need it, and it must NOT go in the modpack or
 the launcher's mirrorMods list.
 
 FILES
-  mods/multicore-0.3.0.jar        the mod
+  mods/multicore-0.3.1.jar        the mod
   config/multicore-common.toml    default config (created on first start anyway)
 
 TESTED WITH THE NEW MODS
@@ -31,7 +46,7 @@ TESTED WITH THE NEW MODS
   pickup) takes MultiCore's mod lock.
 
 INSTALL (server stopped; take a backup of the world first)
-1. Copy mods/multicore-0.3.0.jar into the server's mods/.
+1. Copy mods/multicore-0.3.1.jar into the server's mods/.
 2. Leave dimthread installed for the first start. While its gamerule
    dimthread_active is true (the default), MultiCore stands by and does
    nothing, so the first start is the same as today.
@@ -68,13 +83,30 @@ If MultiCore detects a threading error it logs it and switches itself to
 single-thread ticking for the rest of the session (fallbackToSerialOnError).
 
 REMOVING IT
-  Stop the server and delete mods/multicore-0.3.0.jar. It stores nothing in
+  Stop the server and delete mods/multicore-0.3.1.jar. It stores nothing in
   the world.
 
 ONCE IT HAS RUN WELL FOR A FEW DAYS
   Remove dimthread from mods/ (its NeoForge port gives almost no parallelism
   and stops some mods, such as Open Parties and Claims, from doing work during
   world ticks).
+
+TEST NOTES (2026-11-24, 0.3.1, local test servers only)
+  Pack: the 208 jars of 2026-11-15 plus the two poll mods Create: Aeroworks
+  1.5.0 and RPG Prefab Houses 2.1.0 (210 jars). Full pack: 43/43 GameTests in
+  the last 5 runs with the final code (plus fuzz test, no MultiCore-only
+  errors), clean shutdown each time; 28 unit tests.
+  TaCZ / Sophisticated Backpacks addon 1.0.0: CANNOT be added. It requires the
+  mod id "tacz-1-21-1" (an unofficial TaCZ port); the pack's TaCZ 1.1.8 is
+  "tacz", so NeoForge refuses to start the server. Not a MultiCore issue.
+  Seen but not caused by MultiCore: 1 start in 13 of the dev test server
+  failed in Create's Registrate ("unused register callbacks"; a real server
+  only logs a warning there), then hung because some mod keeps a non-daemon
+  thread pool alive.
+  Open: a small Create-only test pack sometimes loses block drops in the nether
+  in one regression test (also in 0.3.0; never seen in the full pack). Create
+  logistics reaching a vault in ANOTHER DIMENSION is not paused (only other
+  regions are); vanilla hoppers on that vault could race it.
 
 TEST NOTES (2026-11-20, 0.3.0, local test servers only)
   Full pack (208 jars): 40/40 GameTests + 24 unit tests, brute-force test with
@@ -122,4 +154,4 @@ TEST NOTES (2026-11-15, local test server only)
     (NoClassDefFoundError dan200/computercraft/...), MultiCore on or off.
     Electronic Warfare was left out of the test.
 
-jar sha256 (multicore-0.3.0.jar): ea349416fedceda344cf218c1f6b6195725991a92308cf865748f72003232635
+jar sha256 (multicore-0.3.1.jar): e713fca0ccf15c5561dea98ea7b6cf858e913b8210106d6f04fda51cc6dccb03

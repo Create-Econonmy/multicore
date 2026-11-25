@@ -9,6 +9,7 @@
     "compat.create.BeltHelperMixin",
     "compat.create.BrassTunnelStaticsCarrier",
     "compat.create.DeployerCaptureCarrier",
+    "compat.create.LogisticsPauseCarrier",
     "compat.create.ShapeCachesMixin",
     "compat.create.SharedStateLockCarrier",
     "compat.createthreadedtrains.GlobalRailwayManagerMixin",

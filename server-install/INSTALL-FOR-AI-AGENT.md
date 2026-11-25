@@ -1,4 +1,4 @@
-# Installing MultiCore 0.3.0 on the Create Economy server: instructions for an AI agent
+# Installing MultiCore 0.3.1 on the Create Economy server: instructions for an AI agent
 
 You are helping the server's owner install **MultiCore**, a server-side NeoForge mod that ticks the server's worlds on
 several CPU threads (Folia-style). Read this whole file before doing anything. Follow it step by step and stop at
@@ -57,7 +57,7 @@ every **CHECKPOINT** to report to the owner and wait for their go-ahead.
 ## 4. Before installing (read-only, then CHECKPOINT)
 
 1. **Find the files to install.** They're in this folder (`server-install/` of the MultiCore project on the owner's PC):
-   - `mods/multicore-0.3.0.jar`: the mod. Its SHA-256 must be `ea349416fedceda344cf218c1f6b6195725991a92308cf865748f72003232635` (also in `INSTALL.txt`).
+   - `mods/multicore-0.3.1.jar`: the mod. Its SHA-256 must be `e713fca0ccf15c5561dea98ea7b6cf858e913b8210106d6f04fda51cc6dccb03` (also in `INSTALL.txt`).
    - `config/multicore-common.toml`: the default config. Optional; the mod writes it on first start anyway.
 2. **Compare the server's mods with the tested list.** List the server's `mods/` folder and compare it with
    `tools/server-mods-2026-11-15.txt` in the project (the mod list MultiCore was tested with). Report every jar that
@@ -74,7 +74,7 @@ every **CHECKPOINT** to report to the owner and wait for their go-ahead.
 
 ## 5. Install (server stopped)
 
-1. Copy `multicore-0.3.0.jar` into the server's `mods/`. If an older `multicore-*.jar` is there, move it out of
+1. Copy `multicore-0.3.1.jar` into the server's `mods/`. If an older `multicore-*.jar` is there, move it out of
    `mods/` (keep it in the backup); never have two versions in `mods/`.
 2. Optional: copy `config/multicore-common.toml` into the server's `config/`. If one already exists, keep the
    server's file and tell the owner. New options are added automatically.
@@ -127,7 +127,7 @@ gamerule `dimthread_active false` is saved with the world.
 |---|---|
 | Something odd and region threads are on | `/multicore regions off` |
 | Still odd | `/multicore off` (plain single-thread ticking) or `/gamerule dimthread_active true` (back to dimthread) |
-| Server won't start or crashes on start | Stop it, move `mods/multicore-0.3.0.jar` out of `mods/`, start again. Nothing else to undo: MultiCore stores nothing in the world (its `config/multicore-common.toml` and `multicore-map/` folder can stay or go) |
+| Server won't start or crashes on start | Stop it, move `mods/multicore-0.3.1.jar` out of `mods/`, start again. Nothing else to undo: MultiCore stores nothing in the world (its `config/multicore-common.toml` and `multicore-map/` folder can stay or go) |
 
 ## 9. Later (only after several good days, and with the owner's yes)
 

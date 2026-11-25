@@ -172,6 +172,13 @@ public final class ModLock {
         return enterSharedState(SHARED_SOURCES.computeIfAbsent(name, n -> LockSource.of("shared " + n)));
     }
 
+    /** {@link #enterShared}, and on a region thread also pause the other region threads for the rest of the item. */
+    public static boolean enterSharedPausing(String name) {
+        boolean held = enterShared(name);
+        RegionTicker.pauseOtherRegions();
+        return held;
+    }
+
     public static void exit(boolean entered) {
         if (entered) {
             release();

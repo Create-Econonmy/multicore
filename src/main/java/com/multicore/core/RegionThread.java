@@ -93,14 +93,17 @@ public final class RegionThread extends LevelThread {
         return this.updater;
     }
 
-    /** Does the chunk lie in a square of another job (another region thread's part of the world)? */
+    /**
+     * Is the chunk outside this job's part of the world (its squares and the empty border around them)? Another job's
+     * squares, a border two jobs share, and squares nobody owns all count: another region thread may be using them too.
+     */
     public boolean isForeign(int chunkX, int chunkZ) {
         RegionTicker.Split s = this.split;
         if (s == null || this.job < 0) {
             return false;
         }
         int owner = s.squareJob.get(RegionPlan.squareKey(chunkX >> s.shift, chunkZ >> s.shift));
-        return owner >= 0 && owner != this.job;
+        return owner != this.job;
     }
 
     /** Does the chunk belong to the job this thread is running? */

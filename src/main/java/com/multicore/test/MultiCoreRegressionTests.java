@@ -132,7 +132,24 @@ public final class MultiCoreRegressionTests {
         int breaks = 400;
         LevelScheduler.run(nether, () -> nether.setChunkForced(4, 4, true));
         Runnable owWork = () -> breakMany(overworld, owBase, Blocks.COBBLESTONE, breaks);
-        Runnable netherWork = () -> breakMany(nether, netherBase, Blocks.OAK_PLANKS, breaks);
+        java.util.concurrent.atomic.AtomicReference<String> netherSeen = new java.util.concurrent.atomic.AtomicReference<>("not run");
+        java.util.concurrent.atomic.AtomicInteger eventsFirst = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger dropsFirst = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger dropsLast = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger canceled = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.function.Consumer<net.neoforged.neoforge.event.level.BlockDropsEvent> first = e -> {
+            if (e.getLevel() == nether && e.getPos().equals(netherBase)) { eventsFirst.incrementAndGet(); dropsFirst.addAndGet(e.getDrops().size()); }
+        };
+        java.util.function.Consumer<net.neoforged.neoforge.event.level.BlockDropsEvent> last = e -> {
+            if (e.getLevel() == nether && e.getPos().equals(netherBase)) { dropsLast.addAndGet(e.getDrops().size()); if (e.isCanceled()) canceled.incrementAndGet(); }
+        };
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, true, net.neoforged.neoforge.event.level.BlockDropsEvent.class, first);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, true, net.neoforged.neoforge.event.level.BlockDropsEvent.class, last);
+        Runnable netherWork = () -> {
+            breakMany(nether, netherBase, Blocks.OAK_PLANKS, breaks);
+            netherSeen.set(countItems(nether, netherBase, Items.OAK_PLANKS) + " planks right after, on " + Thread.currentThread().getName()
+                    + ", doTileDrops " + nether.getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_DOBLOCKDROPS));
+        };
         helper.runAfterDelay(5, () -> {
             LevelScheduler.run(overworld, owWork);
             LevelScheduler.run(nether, netherWork);
@@ -149,15 +166,25 @@ public final class MultiCoreRegressionTests {
             });
             helper.assertTrue(owCobble == breaks && netherPlanks == breaks && owPlanks == 0 && netherCobble == 0,
                     "drops ended up in the wrong place: overworld cobble=" + owCobble + " planks=" + owPlanks
-                            + ", nether planks=" + netherPlanks + " cobble=" + netherCobble);
+                            + ", nether planks=" + netherPlanks + " cobble=" + netherCobble
+                            + " (nether chunk loaded " + nether.isLoaded(netherBase) + ", block there " + nether.getBlockState(netherBase)
+                            + ", floor " + nether.getBlockState(netherBase.below()) + ", nether item entities near it "
+                            + nether.getEntitiesOfClass(ItemEntity.class, new AABB(netherBase).inflate(32)).size() + ", nether game time " + nether.getGameTime() + "; " + netherSeen.get() + "; drop events " + eventsFirst.get() + ", drops in them first " + dropsFirst.get()
+                            + ", last " + dropsLast.get() + ", canceled " + canceled.get() + ")");
             helper.succeed();
         });
     }
 
     private static void breakMany(ServerLevel level, BlockPos base, net.minecraft.world.level.block.Block block, int count) {
-        for (int x = -2; x <= 2; x++) {
-            for (int z = -2; z <= 2; z++) {
+        // A closed bedrock box: in the nether the spot can be over a lava lake, and drops that bounce off an open
+        // platform burn there (the test then saw "no drops" although nothing was wrong).
+        for (int x = -3; x <= 3; x++) {
+            for (int z = -3; z <= 3; z++) {
                 level.setBlock(base.offset(x, -1, z), Blocks.BEDROCK.defaultBlockState(), 2);
+                boolean wall = Math.abs(x) == 3 || Math.abs(z) == 3;
+                for (int y = 0; y <= 2; y++) {
+                    level.setBlock(base.offset(x, y, z), wall ? Blocks.BEDROCK.defaultBlockState() : Blocks.AIR.defaultBlockState(), 2);
+                }
             }
         }
         for (int i = 0; i < count; i++) {
