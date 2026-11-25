@@ -12,21 +12,6 @@ import org.spongepowered.asm.mixin.Pseudo;
  */
 @Pseudo
 @Mixin(targets = {
-        "com.rieno.gadgetsandgizmos.neoforge.CTServerFeatureCleanup",
-        "com.rieno.gadgetsandgizmos.neoforge.ControllerGraphWebServer",
-        "com.rieno.gadgetsandgizmos.neoforge.client.ClawMarkerRenderState",
-        "com.rieno.gadgetsandgizmos.neoforge.client.DiagnosticTabletClientAppData",
-        "com.rieno.gadgetsandgizmos.neoforge.client.EntityLauncherRopePhysics",
-        "com.rieno.gadgetsandgizmos.neoforge.network.AdvancedControllerGraphSnapshotPayload",
-        "com.rieno.gadgetsandgizmos.neoforge.network.AdvancedHudImageUploadPayload",
-        "com.rieno.gadgetsandgizmos.neoforge.network.ContraptionNetworkLinkerSnapshotPayload",
-        "com.rieno.gadgetsandgizmos.registry.CTCreativeTabs",
-        "com.rpgprefabhouses.client.gui.Presets",
-        "com.rpgprefabhouses.client.gui.StyleEntry",
-        "com.rpgprefabhouses.expansion.ExpansionService",
-        "com.rpgprefabhouses.expansion.Fixtures",
-        "com.rpgprefabhouses.expansion.HouseRegistry",
-        "com.rpgprefabhouses.gen.BS",
         "com.rpgprefabhouses.gen.DesignAudit",
         "com.rpgprefabhouses.gen.proc.Decoration",
         "com.rpgprefabhouses.gen.proc.Materials",
@@ -51,7 +36,22 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.simibubi.create.content.kinetics.belt.BeltShapes",
         "com.simibubi.create.content.kinetics.deployer.DeployerHandler",
         "com.simibubi.create.content.logistics.box.PackageStyles",
-        "com.simibubi.create.content.logistics.packagerLink.LogisticsNetworkSavedData"
+        "com.simibubi.create.content.logistics.packagerLink.LogisticsNetworkSavedData",
+        "com.simibubi.create.content.logistics.packagerLink.PackagerLinkBlockEntity",
+        "com.simibubi.create.content.redstone.link.RedstoneLinkNetworkHandler$Frequency",
+        "com.simibubi.create.content.trains.RailwaySavedData",
+        "com.simibubi.create.content.trains.bogey.AbstractBogeyBlockEntity",
+        "com.simibubi.create.content.trains.bogey.BogeyStyle$Builder",
+        "com.simibubi.create.content.trains.display.FlapDisplaySection",
+        "com.simibubi.create.content.trains.display.GlobalTrainDisplayData",
+        "com.simibubi.create.content.trains.entity.Carriage",
+        "com.simibubi.create.content.trains.entity.CarriageBogey",
+        "com.simibubi.create.content.trains.graph.EdgeData",
+        "com.simibubi.create.content.trains.graph.EdgePointStorage",
+        "com.simibubi.create.content.trains.graph.EdgePointType",
+        "com.simibubi.create.content.trains.graph.TrackGraphSync",
+        "com.simibubi.create.content.trains.graph.TrackGraphSyncPacket",
+        "com.simibubi.create.foundation.ClientResourceReloadListener"
 }, remap = false)
 public abstract class StaticGuardCarrier08 {
 }

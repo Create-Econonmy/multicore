@@ -12,14 +12,6 @@ import org.spongepowered.asm.mixin.Pseudo;
  */
 @Pseudo
 @Mixin(targets = {
-        "com.railwayteam.railways.content.fuel.LiquidFuelManager",
-        "com.railwayteam.railways.content.fuel.LiquidFuelManager$ReloadListener",
-        "com.railwayteam.railways.impl.bogeymenu.v0.BogeyMenuManagerImpl",
-        "com.railwayteam.railways.multiloader.CommonTags",
-        "com.railwayteam.railways.registry.commands.TrackDemoCommand",
-        "com.railwayteam.railways.util.DevCapeUtils",
-        "com.railwayteam.railways.util.neoforge.RegistrationListeningImpl",
-        "com.railwayteam.railways.util.packet.BogeyStyleSelectionPacket",
         "com.railwayteam.railways.util.packet.ConfigureDevCapeC2SPacket",
         "com.rieno.gadgetsandgizmos.compat.aeroworks.AeroworksControllerCompat",
         "com.rieno.gadgetsandgizmos.compat.computed.ComputedEventCompat",
@@ -51,7 +43,15 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.rieno.gadgetsandgizmos.content.LomensMusicDiscLootModifier",
         "com.rieno.gadgetsandgizmos.content.PhysicsGantryBeltWheelBlock",
         "com.rieno.gadgetsandgizmos.content.PhysicsGantryBeltWheelBlockEntity",
-        "com.rieno.gadgetsandgizmos.content.PhysicsGantryShaftBlock"
+        "com.rieno.gadgetsandgizmos.content.PhysicsGantryShaftBlock",
+        "com.rieno.gadgetsandgizmos.content.PhysicsGantryShaftBlockEntity",
+        "com.rieno.gadgetsandgizmos.content.PortableContraptionControllerRuntime",
+        "com.rieno.gadgetsandgizmos.content.RopeWinchUnstickWindow",
+        "com.rieno.gadgetsandgizmos.content.ShipControlModuleRuntime",
+        "com.rieno.gadgetsandgizmos.content.ShipCouplerService",
+        "com.rieno.gadgetsandgizmos.content.ShipDockRegistry",
+        "com.rieno.gadgetsandgizmos.content.ShippingRouteDatabase",
+        "com.rieno.gadgetsandgizmos.content.ShippingScheduleRuntime"
 }, remap = false)
 public abstract class StaticGuardCarrier06 {
 }

@@ -12,25 +12,6 @@ import org.spongepowered.asm.mixin.Pseudo;
  */
 @Pseudo
 @Mixin(targets = {
-        "com.supermartijn642.core.registry.Registries",
-        "com.supermartijn642.fusion.model.predicates.ItemWrapperModelPredicate",
-        "com.supermartijn642.rechiseled.chiseling.ChiselingRecipeManagerImpl",
-        "com.supermartijn642.rechiseled.registration.RechiseledRegistrationImpl",
-        "com.tacz.guns.api.GunProperties",
-        "com.tacz.guns.api.GunProperty",
-        "com.tacz.guns.api.TimelessAPI",
-        "com.tacz.guns.api.resource.ResourceManager",
-        "com.tacz.guns.client.renderer.crosshair.CrosshairType",
-        "com.tacz.guns.config.util.HeadShotAABBConfigRead",
-        "com.tacz.guns.resource.GunPackLoader",
-        "com.tacz.guns.resource.VersionChecker",
-        "com.tacz.guns.resource.pojo.data.block.BlockData",
-        "com.tacz.guns.util.CycleTaskHelper",
-        "com.tacz.guns.util.DelayedTask",
-        "com.tacz.guns.util.HitboxHelper",
-        "com.taklsforge.create_safe_seating.server.RestManager",
-        "com.teamresourceful.resourcefullib.client.sysinfo.SystemInfo",
-        "com.teamresourceful.resourcefullib.common.recipe.ingredient.neoforge.IngredientHelperImpl",
         "com.teamresourceful.resourcefullib.common.utils.SaveHandler",
         "com.teamresourceful.resourcefullib.common.utils.files.CodecSavedData",
         "com.tom.storagemod.inventory.InventoryCableNetwork",
@@ -51,7 +32,26 @@ import org.spongepowered.asm.mixin.Pseudo;
         "de.bluecolored.shadow.apache.commons.pool2.impl.EvictionTimer",
         "de.bluecolored.shadow.configurate.util.EnumLookup",
         "de.bluecolored.shadow.geantyref.AnnotationInvocationHandler",
-        "de.maxhenkel.voicechat.plugins.impl.audiosender.AudioSenderImpl"
+        "de.maxhenkel.voicechat.plugins.impl.audiosender.AudioSenderImpl",
+        "de.theidler.create_mobile_packages.blocks.bee_port.DronePortTracker",
+        "de.theidler.create_mobile_packages.items.portable_stock_ticker.ClientScreenStorage",
+        "de.theidler.create_mobile_packages.robo.RoboManager",
+        "dev.architectury.core.fluid.ArchitecturyFlowingFluid",
+        "dev.architectury.platform.forge.PlatformImpl",
+        "dev.architectury.registry.forge.CreativeTabRegistryImpl",
+        "dev.architectury.registry.level.biome.forge.BiomeModificationsImpl",
+        "dev.architectury.registry.level.biome.forge.BiomeModificationsImpl$BiomeModifierImpl",
+        "dev.architectury.registry.level.entity.trade.forge.TradeRegistryImpl",
+        "dev.architectury.registry.registries.RegistrarManager",
+        "dev.architectury.registry.registries.forge.RegistrarManagerImpl$RegistryBuilderWrapper",
+        "dev.architectury.registry.registries.forge.RegistrarManagerImpl$RegistryProviderImpl",
+        "dev.engine_room.flywheel.impl.layout.LayoutBuilderImpl",
+        "dev.engine_room.flywheel.lib.util.LevelAttached",
+        "dev.engine_room.flywheel.lib.util.LevelAttached$CleaningAction",
+        "dev.eriksonn.aeronautics.api.levitite_blend_crystallization.CrystallizationWorldSaveData",
+        "dev.eriksonn.aeronautics.api.levitite_blend_crystallization.LevititeCrystallizerManager",
+        "dev.eriksonn.aeronautics.content.blocks.hot_air.balloon.map.BalloonLevelSavedData",
+        "dev.eriksonn.aeronautics.data.AeroAdvancementTriggers"
 }, remap = false)
 public abstract class StaticGuardCarrier10 {
 }

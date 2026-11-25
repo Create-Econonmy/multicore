@@ -12,12 +12,6 @@ import org.spongepowered.asm.mixin.Pseudo;
  */
 @Pseudo
 @Mixin(targets = {
-        "com.natamus.collective_common_forge.functions.BlockPosFunctions",
-        "com.natamus.collective_common_forge.functions.FABFunctions",
-        "com.natamus.collective_common_forge.functions.GearFunctions",
-        "com.natamus.collective_common_forge.functions.HeadFunctions",
-        "com.natamus.collective_common_forge.functions.ItemFunctions",
-        "com.natamus.collective_common_forge.functions.SpawnEntityFunctions",
         "com.natamus.collective_common_forge.implementations.event.EventFactoryImpl",
         "com.natamus.collective_common_forge.translations.ServerTranslationPack",
         "com.natamus.collective_common_forge.translations.TranslationResolver",
@@ -38,8 +32,6 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.natamus.collective_common_neoforge.translations.TranslationResolver",
         "com.pedrorok.hypertube.core.sound.TubeSoundManager",
         "com.possible_triangle.atmosphere.impl.WeatherApiImpl",
-        "com.raiiiden.warborn.client.shader.ClientVisionState",
-        "com.raiiiden.warborn.client.util.ArmorLayerCoverage",
         "com.raiiiden.warborn.common.config.WarbornArmorValues",
         "com.raiiiden.warborn.common.config.WarbornCommonConfig",
         "com.raiiiden.warborn.common.event.HelmetBatteryTickHandler",
@@ -51,7 +43,15 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.railwayteam.railways.base.data.recipe.RailwaysStandardRecipeGen$GeneratedRecipeBuilder",
         "com.railwayteam.railways.content.bogey_menu.handler.BogeyMenuHandlerServer",
         "com.railwayteam.railways.content.custom_tracks.casing.CasingCollisionUtils$Builder",
-        "com.railwayteam.railways.content.custom_tracks.generic_crossing.TrackShapeLookup"
+        "com.railwayteam.railways.content.custom_tracks.generic_crossing.TrackShapeLookup",
+        "com.railwayteam.railways.content.fuel.LiquidFuelManager",
+        "com.railwayteam.railways.content.fuel.LiquidFuelManager$ReloadListener",
+        "com.railwayteam.railways.impl.bogeymenu.v0.BogeyMenuManagerImpl",
+        "com.railwayteam.railways.multiloader.CommonTags",
+        "com.railwayteam.railways.registry.commands.TrackDemoCommand",
+        "com.railwayteam.railways.util.DevCapeUtils",
+        "com.railwayteam.railways.util.neoforge.RegistrationListeningImpl",
+        "com.railwayteam.railways.util.packet.BogeyStyleSelectionPacket"
 }, remap = false)
 public abstract class StaticGuardCarrier05 {
 }

@@ -75,12 +75,12 @@ public final class AutoAdjustTests {
      * Region threads as needed: the overworld starts unsplit (on its shared dimension thread). Four groups of busy pigs far
      * apart make its tick slower than the target, so it must get region threads, one step per window, until each group
      * has one; when the pigs stop working it must give them back, down to none. Short windows (10 ticks) and a low target
-     * (4 ms) so the test does not have to wait minutes.
+     * (10 ms, 29 ms of pig work; threads go back under 6 ms) so the test does not have to wait minutes.
      */
     @GameTest(template = "empty", batch = "autoadjust_scale", timeoutTicks = 600)
     public static void slowWorldGetsRegionThreadsAndGivesThemBack(GameTestHelper helper) {
         com.multicore.core.RegionScaler scaler = com.multicore.core.RegionScaler.get();
-        scaler.configure(new com.multicore.core.RegionScaler.Settings(true, 4.0, 2.5, 1, 4, 2, 3, 10));
+        scaler.override(new com.multicore.core.RegionScaler.Settings(true, 10.0, 6.0, 1, 4, 2, 3, 10));
         ServerLevel level = helper.getLevel();
         String dim = level.dimension().location().toString();
         net.minecraft.core.BlockPos o = helper.absolutePos(net.minecraft.core.BlockPos.ZERO);
@@ -106,7 +106,7 @@ public final class AutoAdjustTests {
         Object listener = new Object() {
             @net.neoforged.bus.api.SubscribeEvent
             public void tick(net.neoforged.neoforge.event.tick.EntityTickEvent.Pre e) {
-                if (working.get() && ids.contains(e.getEntity().getUUID())) busy(150_000L);
+                if (working.get() && ids.contains(e.getEntity().getUUID())) busy(300_000L);
             }
         };
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(listener);
@@ -120,7 +120,7 @@ public final class AutoAdjustTests {
                     level.setChunkForced((spot[0] >> 4) + dx, (spot[1] >> 4) + dz, false);
                 }
             }
-            scaler.configure(new com.multicore.core.RegionScaler.Settings(false, 40, 15, 1, 0, 2, 3, 100));
+            scaler.clearOverride();
         };
         helper.onEachTick(() -> {
             int t = scaler.threads(dim);

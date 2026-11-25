@@ -445,6 +445,7 @@ public final class PackAnalyzer {
         GUARD_OWNERS.add(cn.name);
         if (cn.superName != null) SUPERS.put(cn.name, cn.superName);
         if ((cn.access & Opcodes.ACC_INTERFACE) != 0) INTERFACES.add(cn.name);
+        if (isClientClass(cn)) CLIENT_CLASSES.add(cn.name);
         boolean iface = (cn.access & Opcodes.ACC_INTERFACE) != 0;
         for (MethodNode mn : cn.methods) {
             if (mn.name.equals("<clinit>") || mn.instructions == null) continue;
@@ -512,6 +513,21 @@ public final class PackAnalyzer {
         return out;
     }
 
+    /** Mod classes that only exist on the client (@OnlyIn(Dist.CLIENT), or @EventBusSubscriber(value = CLIENT)). */
+    private static final Set<String> CLIENT_CLASSES = new java.util.HashSet<>();
+
+    private static boolean isClientClass(ClassNode cn) {
+        if (cn.name.contains("/client/")) return true;
+        for (AnnotationNode an : annotations(cn.visibleAnnotations, cn.invisibleAnnotations)) {
+            if (an.desc.equals("Lnet/neoforged/api/distmarker/OnlyIn;") || an.desc.equals("Lnet/minecraftforge/api/distmarker/OnlyIn;")
+                    || an.desc.equals("Lnet/fabricmc/api/Environment;")) {
+                Object v = value(an, "value");
+                if (v instanceof String[] e && e.length == 2 && e[1].equals("CLIENT")) return true;
+            }
+        }
+        return false;
+    }
+
     private static final Set<String> EARLY_CLASSES = new java.util.HashSet<>();
     private static final Set<String> EARLY_PACKAGES = new java.util.HashSet<>();
     /** Classes with a collection keyed by world (Map<Level, ...>): a per-world registry every region thread shares. */
@@ -532,6 +548,7 @@ public final class PackAnalyzer {
         if (refs == null) return true;
         for (String r : refs) {
             for (String p : CLIENT_ONLY) if (r.startsWith(p)) return true;
+            if (CLIENT_CLASSES.contains(r) || r.contains("/client/")) return true;
             if (GUARD_OWNERS.contains(r)) continue;
             boolean platform = false;
             for (String p : PLATFORM) if (r.startsWith(p)) { platform = true; break; }

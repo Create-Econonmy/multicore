@@ -177,11 +177,22 @@ public final class ModLock {
      */
     public static boolean enterFromWorker(String what) {
         Thread current = Thread.currentThread();
-        if (current instanceof LevelThread || current == TickThreads.serverThread() || !ParallelTicker.get().isActive()) {
+        if (current instanceof LevelThread || current == TickThreads.serverThread()) {
             return false;
         }
+        // Always, also while the dimensions tick on the server thread: from now on the server thread takes the lock
+        // for what the worker shares with it (see ContentPolicy.lockingActive), so the two never overlap.
+        workerSeen = true;
         acquire(MOD_SOURCES.computeIfAbsent("worker " + what, LockSource::of));
         return true;
+    }
+
+    /** A mod's worker thread has run game code under the lock (createthreadedtrains). */
+    private static volatile boolean workerSeen;
+
+    /** Must the server thread take the lock too? Only once a mod's worker thread runs game code beside it. */
+    static boolean serverThreadLocks() {
+        return workerSeen && Thread.currentThread() == TickThreads.serverThread();
     }
 
     /**
@@ -191,7 +202,7 @@ public final class ModLock {
      * which rules out deadlocks between the two.
      */
     public static boolean enterSharedState(LockSource source) {
-        if (Thread.currentThread() instanceof LevelThread && TickThreads.inParallelPhase()) {
+        if ((Thread.currentThread() instanceof LevelThread && TickThreads.inParallelPhase()) || serverThreadLocks()) {
             acquire(source);
             return true;
         }

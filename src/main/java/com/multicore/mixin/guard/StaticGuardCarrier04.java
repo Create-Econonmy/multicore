@@ -12,11 +12,6 @@ import org.spongepowered.asm.mixin.Pseudo;
  */
 @Pseudo
 @Mixin(targets = {
-        "com.mrvew.createguard.ItemScan",
-        "com.mrvew.createguard.Reports",
-        "com.mrvew.endersecure.NetworkData",
-        "com.mrvew.voteranks.AdminCommands",
-        "com.mrvew.voteranks.Cosmetics",
         "com.mrvew.voteranks.HomeHooks",
         "com.mrvew.voteranks.ModCheck",
         "com.mrvew.voteranks.Ranks",
@@ -24,7 +19,6 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.mrvew.voteranks.Uploads",
         "com.mrvew.voteranks.View",
         "com.mrvew.voteranks.VoteData",
-        "com.mrvew.voteranks.VoteRanks",
         "com.natamus.collective.fabric.services.FabricRegisterBlockHelper",
         "com.natamus.collective.neoforge.bundle.NeoForgeBundleConfigCheck",
         "com.natamus.collective.neoforge.services.NeoForgeRegisterBlockHelper",
@@ -51,7 +45,13 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.natamus.collective_common_forge.data.GlobalVariables",
         "com.natamus.collective_common_forge.events.CollectiveEvents",
         "com.natamus.collective_common_forge.fakeplayer.FakePlayerFactory",
-        "com.natamus.collective_common_forge.features.PlayerHeadCacheFeature"
+        "com.natamus.collective_common_forge.features.PlayerHeadCacheFeature",
+        "com.natamus.collective_common_forge.functions.BlockPosFunctions",
+        "com.natamus.collective_common_forge.functions.FABFunctions",
+        "com.natamus.collective_common_forge.functions.GearFunctions",
+        "com.natamus.collective_common_forge.functions.HeadFunctions",
+        "com.natamus.collective_common_forge.functions.ItemFunctions",
+        "com.natamus.collective_common_forge.functions.SpawnEntityFunctions"
 }, remap = false)
 public abstract class StaticGuardCarrier04 {
 }

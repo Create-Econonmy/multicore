@@ -12,11 +12,6 @@ import org.spongepowered.asm.mixin.Pseudo;
  */
 @Pseudo
 @Mixin(targets = {
-        "com.jesz.createdieselgenerators.compat.kubejs.LighterSkinsEventJS",
-        "com.jesz.createdieselgenerators.compat.kubejs.MoldEventJS",
-        "com.jesz.createdieselgenerators.content.molds.MoldType",
-        "com.jesz.createdieselgenerators.world.OilChunksSavedData",
-        "com.kipti.bnb.foundation.caching.LevelSafeStorage",
         "com.kipti.bnb.foundation.caching.LevelSimpleCache",
         "com.kreidev.cmpackagecouriers.CourierTarget",
         "com.kreidev.cmpackagecouriers.plane.CardboardPlaneSavedData",
@@ -51,7 +46,12 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.mrvew.cemoney.Sidebar",
         "com.mrvew.chatfilter.PlayerPrefs",
         "com.mrvew.createguard.DupeDetector",
-        "com.mrvew.createguard.Guard"
+        "com.mrvew.createguard.Guard",
+        "com.mrvew.createguard.ItemScan",
+        "com.mrvew.createguard.Reports",
+        "com.mrvew.endersecure.NetworkData",
+        "com.mrvew.voteranks.AdminCommands",
+        "com.mrvew.voteranks.Cosmetics"
 }, remap = false)
 public abstract class StaticGuardCarrier03 {
 }

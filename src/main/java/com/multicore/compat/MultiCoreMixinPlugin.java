@@ -66,12 +66,16 @@ public final class MultiCoreMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-        if (mixinClassName.endsWith(".guard.StaticGuardCarrier")) {
+        if (mixinClassName.contains(".guard.StaticGuardCarrier")) {
             String simple = targetClassName.substring(targetClassName.lastIndexOf('.') + 1);
             int wrapped = StaticGuard.isPerWorldState(targetClass.name)
                     ? MethodLockTransformer.wrapAllMethods(targetClass, "per-world " + simple)
                     : MethodLockTransformer.wrapMethodsReading(targetClass, StaticGuard.fields(), "static " + simple);
-            StaticGuard.noteWrapped(wrapped);
+            int total = StaticGuard.noteWrapped(wrapped);
+            int classes = StaticGuard.noteClass();
+            if (classes <= 3 || classes % 100 == 0) {
+                MultiCore.LOGGER.info("[MultiCore] Static guard: {} ({} methods); {} classes, {} methods so far", targetClassName, wrapped, classes, total);
+            }
             return;
         }
         if (mixinClassName.endsWith(".sable.RapierNativeLockCarrier")) {
@@ -90,8 +94,11 @@ public final class MultiCoreMixinPlugin implements IMixinConfigPlugin {
             int wrapped = MethodLockTransformer.wrapAllMethods(targetClass, modId + " " + targetClassName.substring(targetClassName.lastIndexOf('.') + 1));
             MultiCore.LOGGER.info("[MultiCore] {}: {} methods take the mod lock (state shared by every machine)", targetClassName, wrapped);
         } else if (mixinClassName.endsWith(".create.LogisticsPauseCarrier")) {
+            // The per-tick bookkeeping (now run on every world's thread with the level tick events) only touches Create's
+            // own records: the lock is enough. Requests and stock summaries reach inventories: those pause the world.
             int wrapped = MethodLockTransformer.wrapAllMethods(targetClass,
-                    "create " + targetClassName.substring(targetClassName.lastIndexOf('.') + 1), "enterSharedPausing");
+                    "create " + targetClassName.substring(targetClassName.lastIndexOf('.') + 1),
+                    m -> m.name.equals("tick") ? "enterShared" : "enterSharedPausing");
             MultiCore.LOGGER.info("[MultiCore] {}: {} methods take the mod lock and pause every other tick thread", targetClassName, wrapped);
         } else if (mixinClassName.endsWith(".create.BrassTunnelStaticsCarrier")) {
             int rewritten = ThreadLocalStaticsTransformer.rewrite(targetClass, ThreadStatics.CREATE_BRASS_TUNNEL, CREATE_BRASS_TUNNEL_FIELDS);

@@ -1673,11 +1673,9 @@ S dev/engine_room/flywheel/lib/util/LevelAttached$CleaningAction
 S dev/eriksonn/aeronautics/api/levitite_blend_crystallization/CrystallizationWorldSaveData
 S dev/eriksonn/aeronautics/api/levitite_blend_crystallization/LevititeCrystallizerManager
 S dev/eriksonn/aeronautics/content/blocks/hot_air/balloon/map/BalloonLevelSavedData
-S dev/ftb/mods/ftbchunks/client/map/MapManager
 S dev/ftb/mods/ftbchunks/data/ClaimedChunkManagerImpl
 S dev/ithundxr/createnumismatics/content/backend/BankSavedData
 S dev/jwaterfall/coastersengineered/CartAssembly
-S dev/jwaterfall/coastersengineered/span/TrackSpanGeometry
 S dev/propulsionteam/propulsionsimulated/content/cable/CableNetworkManager
 S dev/ryanhcode/sable/physics/config/dimension_physics/DimensionPhysicsData
 S dev/ryanhcode/sable/sublevel/storage/SubLevelOccupancySavedData
@@ -1686,7 +1684,6 @@ S dev/ryanhcode/sable/sublevel/tracking_points/SubLevelTrackingPointSavedData
 S dev/silvergold/simulatedcoasters/balloon/BalloonHostIndex
 S dev/silvergold/simulatedcoasters/balloon/BalloonLoadReconciler
 S dev/silvergold/simulatedcoasters/balloon/BalloonTetherController
-S dev/silvergold/simulatedcoasters/client/cart/CoasterCartTrainLinkClientState
 S dev/silvergold/simulatedcoasters/rivet/RivetHostIndex
 S dev/silvergold/simulatedcoasters/rivet/RivetLoadReconciler
 S dev/silvergold/simulatedcoasters/track/CoasterTrackPlacementCommitDeferral
@@ -1720,7 +1717,6 @@ S net/mehvahdjukaar/moonlight/core/fake_player/FakeGenericPlayer
 S net/mehvahdjukaar/supplementaries/common/block/tiles/EndermanSkullBlockTile
 S net/mehvahdjukaar/supplementaries/common/misc/block_movement/PistonAttemptsTracker
 S net/mehvahdjukaar/supplementaries/common/misc/block_movement/PulleyCooperationData
-S net/mehvahdjukaar/supplementaries/common/misc/globe/GlobeData
 S net/mehvahdjukaar/supplementaries/common/network/ClientBoundSyncAmbientLightPacket
 S net/p3pp3rf1y/sophisticatedbackpacks/backpack/BackpackStorage
 S net/p3pp3rf1y/sophisticatedbackpacks/backpack/BackpackTemplateStorage
@@ -1752,8 +1748,6 @@ S noobanidus/mods/lootr/common/block/entity/BlockEntityTicker
 S noobanidus/mods/lootr/common/chunk/LoadedChunks
 S noobanidus/mods/lootr/common/data/DataStorage$LootrDummyData
 S noobanidus/mods/lootr/common/data/LootrSavedData
-S org/patryk3211/powergrid/electricity/ClientWorldNetworks
-S org/patryk3211/powergrid/electricity/GlobalElectricNetworks
 S org/patryk3211/powergrid/electricity/WorldNetworks
 S org/patryk3211/powergrid/electricity/wire/JunctionWireEndpoint
 S plus/dragons/createdragonsplus/integration/simulated/common/fluids/tank/FragileFluidTankImpactDispatcher

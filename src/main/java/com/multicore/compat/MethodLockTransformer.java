@@ -59,13 +59,19 @@ public final class MethodLockTransformer {
 
     /** {@link #wrapAllMethods(ClassNode, String)} with another {@code ModLock} entry ("enterSharedPausing"). */
     public static int wrapAllMethods(ClassNode node, String lockName, String enterMethod) {
+        return wrapAllMethods(node, lockName, m -> enterMethod);
+    }
+
+    /** Every method, each with the {@code ModLock} entry {@code enterFor} picks for it (null = leave it alone). */
+    public static int wrapAllMethods(ClassNode node, String lockName, java.util.function.Function<MethodNode, String> enterFor) {
         List<MethodNode> wrappers = new ArrayList<>();
-        for (MethodNode method : node.methods) {
+        for (MethodNode method : List.copyOf(node.methods)) {
             if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE | Opcodes.ACC_SYNTHETIC | Opcodes.ACC_BRIDGE)) != 0
                     || method.name.startsWith("<") || method.name.startsWith(PREFIX)) {
                 continue;
             }
-            wrappers.add(wrap(node, method, lockName, enterMethod));
+            String enter = enterFor.apply(method);
+            if (enter != null) wrappers.add(wrap(node, method, lockName, enter));
         }
         node.methods.addAll(wrappers);
         return wrappers.size();

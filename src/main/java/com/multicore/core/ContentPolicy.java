@@ -123,7 +123,8 @@ public final class ContentPolicy {
 
     /** A mod's listeners for one event, listed as "modid:EventName" (nested events as "EntityTickEvent$Pre"). */
     public static boolean isSafeListener(String modId, String eventName) {
-        if (lockedListeners.contains(modId + ":" + eventName) || lockedListeners.contains(modId + ":*")) {
+        if (lockedListeners.contains(modId + ":" + eventName) || lockedListeners.contains(modId + ":*")
+                || lockedListeners.contains("*:" + eventName)) {
             return false;
         }
         return unlockAll || safeNamespaces.contains(modId) || safeListeners.contains(modId + ":" + eventName);
@@ -154,7 +155,7 @@ public final class ContentPolicy {
 
     /** Fast pre-check shared by all hooks: only dimension threads during the parallel phase ever need the lock. */
     public static boolean lockingActive() {
-        return serializeUnsafe && Thread.currentThread() instanceof LevelThread && TickThreads.inParallelPhase();
+        return serializeUnsafe && ((Thread.currentThread() instanceof LevelThread && TickThreads.inParallelPhase()) || ModLock.serverThreadLocks());
     }
 
     /** @return the lock source to hold while this block entity ticks, or null to run it without the lock */

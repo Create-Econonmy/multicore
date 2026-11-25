@@ -173,26 +173,29 @@ public final class ParallelTicker {
 
         profiler.push("multicore_pre");
         long t0 = System.nanoTime();
+        List<ServerLevel> parallel = new ArrayList<>(levels.length);
+        List<ServerLevel> serial = new ArrayList<>();
         for (ServerLevel level : levels) {
+            (this.isSerial(level) ? serial : parallel).add(level);
+        }
+        // One parallel dimension still gets its thread when regions are on: only there can it be split (see RegionTicker).
+        boolean runParallel = parallel.size() >= 2 || (parallel.size() == 1 && RegionTicker.enabled());
+        if (!runParallel) {
+            serial.addAll(0, parallel);
+        }
+        // Dimensions on their own thread sync their time and fire their level tick events there (see LevelThread); only
+        // dimensions ticked here get them here.
+        for (ServerLevel level : serial) {
             if (tickCount % 20 == 0) {
                 access.multicore$synchronizeTime(level);
             }
             EventHooks.fireLevelTickPre(level, hasTimeLeft);
         }
 
-        List<ServerLevel> parallel = new ArrayList<>(levels.length);
-        List<ServerLevel> serial = new ArrayList<>();
-        for (ServerLevel level : levels) {
-            (this.isSerial(level) ? serial : parallel).add(level);
-        }
-
         long t1 = System.nanoTime();
         profiler.popPush("multicore_parallel");
-        // One parallel dimension still gets its thread when regions are on: only there can it be split (see RegionTicker).
-        if (parallel.size() >= 2 || (parallel.size() == 1 && RegionTicker.enabled())) {
+        if (runParallel) {
             this.runParallel(server, parallel, serial, hasTimeLeft, main, tickCount);
-        } else {
-            serial.addAll(0, parallel);
         }
 
         profiler.popPush("multicore_serial");
@@ -214,7 +217,7 @@ public final class ParallelTicker {
             deferred += System.nanoTime() - d0;
         }
         long p0 = System.nanoTime();
-        for (ServerLevel level : levels) {
+        for (ServerLevel level : serial) {
             EventHooks.fireLevelTickPost(level, hasTimeLeft);
         }
         long post = System.nanoTime() - p0;

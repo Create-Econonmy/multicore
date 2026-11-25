@@ -13,10 +13,28 @@ several dimensions (South, North, War, Shop, Creative, Nether, End), so one busy
 MultiCore ticks each dimension on its own thread, and splits a busy dimension further into regions (see "Region threads" below):
 
 ```
-serial   : time sync, LevelTickEvent.Pre for every dimension      (main thread)
-parallel : every dimension ticks on its own "MultiCore <dim>" thread
-serial   : deferred work, serial-only dimensions, LevelTickEvent.Post (main thread)
+parallel : every dimension thread runs, for each of its dimensions: queued player packets, time sync,
+           LevelTickEvent.Pre, the dimension's tick (split over region threads when it needs them),
+           LevelTickEvent.Post, and the connection ticks of the players in it
+serial   : deferred work (moves between dimensions, commands), chat, logins, autosave   (main thread)
 ```
+
+Since 0.4.0 **every mod is unlocked** (`unlockAllMods = true`) and **no game work is left on the main thread**: the
+world ticks, the level tick events, the players' ticks and the players' world packets (moving, mining, placing,
+clicking in containers) all run on the dimension threads. What the main thread still does is the global part of a tick
+(like Folia's global region): applying what a dimension thread deferred, chat and commands, logins and logouts, and
+saving.
+
+What keeps unlocked mods safe:
+
+| Shared between threads | What MultiCore does |
+|---|---|
+| Shared static collections that mods change while the game runs, mods' saved data (`SavedData`), maps keyed by world | The **static guard**: the pack analyzer lists them (1620 fields, 141 classes for this pack) and only the methods that use them take the lock (`tools/generate-static-guard.py`; run it again after adding mods). |
+| Code that reaches into another dimension (a block entity there, Create's logistics requests) | A **world pause**: every other tick thread stops at its next safe point until that block entity or entity tick is done. |
+| Code that reaches into another region of the same world | That region's threads pause (as before). |
+| Classes found by running the whole pack unlocked | Patched: FallingTree's caches, Supplementaries' hourglass times, Create's track graph, NeoForge's fake players (one per thread), Ritchie's Projectile Lib's chunk manager, Simulated's magnet map, Tom's Storage's cable networks. |
+| Level tick events (where mods do their once-per-tick global work) | Run on each world's own thread, holding the lock (`lockedListeners`). |
+| Create trains, train stations and logistics machines | Still hold the lock (`lockedContent`): their networks span the whole server. |
 
 Folia makes plugins opt in to being thread-safe. Mods cannot opt in, so MultiCore keeps them working on its own:
 
@@ -24,7 +42,7 @@ Folia makes plugins opt in to being thread-safe. Mods cannot opt in, so MultiCor
 |---|---|
 | Mods keep global state and assume one server thread | Code from mods that are not in `threadSafeMods` (their block entities, entities, block ticks, event listeners) holds one shared **mod lock** on dimension threads. Vanilla code keeps running fully in parallel. |
 | Mod block entities and entities load, unload, save and get removed on the dimension thread too (Create's logistics links, Supplementaries' codec cache) | Those hooks hold the mod lock as well. |
-| Mods do global work in `LevelTickEvent` | All `LevelTickEvent` handlers run on the main thread, before and after the parallel phase. |
+| Mods do global work in `LevelTickEvent` | `LevelTickEvent` handlers run on each world's own thread and hold the mod lock (`lockedListeners`). |
 | Portals, `changeDimension`, spawning into another dimension | Deferred to the end of the same tick, on the main thread. |
 | Commands, command blocks, `/schedule`d functions | Run at the end of the tick on the main thread. |
 | Reading chunks or block entities of another dimension | Allowed. Loaded chunks are read directly; unloaded ones are loaded by their owning thread without deadlocking. The first access from each mod class is logged. |
@@ -52,9 +70,9 @@ Each dimension is one region (`[autoAdjust]` in the config). Nothing changes whi
 only acts once the server's real tick time (vanilla's 100-tick average) has stayed over `loadMs` (50 ms, i.e. TPS under
 20) for `loadSeconds` (30) in a row. One good 5-second check restarts the count. Then, every 5 seconds:
 
-- **Idle regions join the main thread.** A dimension without players whose tick costs under `idleMs` (0.5 ms) is
-  ticked on the main thread after the parallel phase instead of waking its own thread. It gets its own thread back as
-  soon as a player enters or it costs over `busyMs` (2 ms), at any TPS.
+- **Idle regions join the main thread** (off by default since 0.4.0: `idleMs = 0`; light dimensions share a dimension
+  thread instead). With `idleMs` set, a dimension without players whose tick costs under it is ticked on the main thread
+  after the parallel phase. It gets its own thread back as soon as a player enters or it costs over `busyMs` (2 ms).
 - **No gain, no threads.** If, over that low-TPS stretch, the parallel tick was less than `minSpeedup` (1.05x) faster
   than the same work on one thread (the sum of the dimensions' tick times minus their mod-lock waits), MultiCore ticks
   like vanilla for `retryMinutes` (10), then tries threads again (and again waits for 30 s under 20 TPS before judging).
@@ -65,8 +83,18 @@ only acts once the server's real tick time (vanilla's 100-tick average) has stay
 
 ## Region threads: one world on several threads
 
-A busy dimension is split further, like Folia (`[regions]` in the config, on by default). Every tick, inside the
-dimension's own thread:
+A busy dimension is split further, like Folia (`[regions]` in the config, on by default).
+
+**As many threads as it needs (0.4.0, `autoScale`).** A world starts unsplit, on the dimension thread it shares with
+other light worlds. Every 5 seconds: a world whose tick takes longer than `targetTickMs` (40 ms) is split over two
+region threads, then gets more (half as many again) while it is still too slow and has more regions than threads, up to
+`threadsPerDimension` (0 = every logical core). If every region already has its own thread, its squares are halved (down
+to `minRegionSizeChunks`, 4) so separate groups of machines become separate regions. A world under `relaxTickMs` (15 ms)
+gives a thread back, down to none, then grows its squares back. `/multicore status` shows each world's threads and
+square size. One region (one connected group of machines and mobs with no gap of a square between them) always runs
+on one thread: a single factory with no gaps in it cannot be split, however many cores there are.
+
+Every tick, inside the dimension's own thread:
 
 ```
 entities        : grouped into regions -> each region on its own "MultiCore <dim> region N" thread

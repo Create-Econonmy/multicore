@@ -152,7 +152,15 @@ public class LevelThread extends Thread {
                 for (int i = 0; i < mine.length; i++) {
                     long t0 = System.nanoTime();
                     try {
+                        // What the main thread did for every level before 0.4.0: time sync and the level tick events,
+                        // now on the level's own thread, in vanilla's order (pre, tick, post).
+                        net.minecraft.server.MinecraftServer server = mine[i].getServer();
+                        if (server.getTickCount() % 20 == 0) {
+                            ((com.multicore.mixin.core.MinecraftServerAccessor) server).multicore$synchronizeTime(mine[i]);
+                        }
+                        net.neoforged.neoforge.event.EventHooks.fireLevelTickPre(mine[i], phase.hasTimeLeft());
                         tickLevel(mine[i], phase.hasTimeLeft());
+                        net.neoforged.neoforge.event.EventHooks.fireLevelTickPost(mine[i], phase.hasTimeLeft());
                         com.multicore.map.ThreadMap.afterLevelTick(mine[i]);
                     } catch (Throwable t) {
                         phase.fail(mine[i], t);

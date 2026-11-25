@@ -452,23 +452,11 @@ public final class RegionTicker {
                     this.reportSlow();
                 }
                 if (WorldPause.heldByOther(this.coordinator)) {
-                    // A thread elsewhere holds the world pause (and the mod lock) and may need chunks of this dimension;
-                    // this dimension's region threads are stopped and hold no read lock.
-                    boolean worked = false;
-                    if (this.rw.writeLock().tryLock()) {
-                        try {
-                            int budget = 256;
-                            while (budget-- > 0 && this.level.getChunkSource().pollTask()) {
-                                worked = true;
-                            }
-                        } catch (Throwable t) {
-                            MultiCore.LOGGER.error("[MultiCore] Error running a chunk task of {} during a world pause", this.level.dimension().location(), t);
-                        } finally {
-                            this.rw.writeLock().unlock();
-                        }
-                    }
-                    worked |= this.coordinator.pollOtherLevels(this.level);
-                    if (!worked) LockSupport.parkNanos(this, 50_000L);
+                    // A thread elsewhere holds the world pause (and the mod lock). This dimension's chunk tasks wait: running
+                    // them here would take the write lock without the mod lock (a chunk-load hook then wanting the mod lock
+                    // deadlocked with a region thread that had it and wanted its read lock back, found 2026-11-25). If the
+                    // pause holder needs a chunk of this dimension, its wait ends the pause first.
+                    if (!this.coordinator.pollOtherLevels(this.level)) LockSupport.parkNanos(this, 50_000L);
                     continue;
                 }
                 if (this.chunkWaiters.get() > 0) {

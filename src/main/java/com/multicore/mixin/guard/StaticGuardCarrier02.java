@@ -12,10 +12,8 @@ import org.spongepowered.asm.mixin.Pseudo;
  */
 @Pseudo
 @Mixin(targets = {
-        "com.hubessentials.TpaCommands",
         "com.hubportals.NpcData",
         "com.hubportals.PortalNpc",
-        "com.hypherionmc.craterlib.api.client.mentions.MentionsController",
         "com.hypherionmc.craterlib.core.loader.plugins.CraterPluginLoader",
         "com.hypherionmc.craterlib.libs.kyori.adventure.text.event.DataComponentValueConverterRegistry$ConversionCache",
         "com.hypherionmc.sdlink.core.discord.events.DiscordEventHandler",
@@ -43,15 +41,17 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.illusivesoulworks.comforts.data.ComfortsItemTagProvider",
         "com.illusivesoulworks.comforts.data.ComfortsLootTableProvider",
         "com.illusivesoulworks.comforts.data.ComfortsRecipeProvider",
-        "com.illusivesoulworks.elytraslot.ElytraSlotCommonMod",
         "com.illusivesoulworks.elytraslot.ElytraSlotCommonMod$1",
-        "com.illusivesoulworks.elytraslot.common.SimpleCompatibilityProvider",
         "com.illusivesoulworks.elytraslot.platform.NeoForgePlatform",
         "com.illusivesoulworks.polymorph.common.integration.PolymorphIntegrations",
         "com.illusivesoulworks.polymorph.common.util.BlockEntityTicker",
         "com.jaquadro.minecraft.storagedrawers.config.PlayerConfig",
         "com.jaquadro.minecraft.storagedrawers.network.PlayerBoolConfigMessage",
-        "com.jesz.createdieselgenerators.compat.kubejs.CDGKubeJSPlugin"
+        "com.jesz.createdieselgenerators.compat.kubejs.LighterSkinsEventJS",
+        "com.jesz.createdieselgenerators.compat.kubejs.MoldEventJS",
+        "com.jesz.createdieselgenerators.content.molds.MoldType",
+        "com.jesz.createdieselgenerators.world.OilChunksSavedData",
+        "com.kipti.bnb.foundation.caching.LevelSafeStorage"
 }, remap = false)
 public abstract class StaticGuardCarrier02 {
 }

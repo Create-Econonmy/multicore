@@ -140,9 +140,10 @@ public final class MultiCoreConfig {
                         "the mod lock, as before 0.4.0.")
                 .define("unlockAllMods", true);
         LOCKED_LISTENERS = b.comment(
-                        "Event listeners (\"modid:EventName\", or \"modid:*\" for all of a mod's) that always hold the mod lock, even with",
-                        "unlockAllMods. Add one here if a mod's listener turns out to keep unsynchronized state.")
-                .defineListAllowEmpty("lockedListeners", List.of(), () -> "", o -> o instanceof String);
+                        "Event listeners (\"modid:EventName\", \"modid:*\" for all of a mod's, \"*:EventName\" for every mod's) that always",
+                        "hold the mod lock, even with unlockAllMods. The defaults: level tick events, which now run on each world's own",
+                        "thread (not the main thread) and are where mods do their once-per-tick global work.")
+                .defineListAllowEmpty("lockedListeners", List.of("*:LevelTickEvent$Pre", "*:LevelTickEvent$Post"), () -> "", o -> o instanceof String);
         THREAD_SAFE_CONTENT = b.comment(
                         "Mod ids whose block entities, entities and blocks may run on several dimension threads at once, while the",
                         "mod's event listeners still hold the mod lock (unless listed in threadSafeListeners). Content listed in",

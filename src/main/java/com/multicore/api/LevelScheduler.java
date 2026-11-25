@@ -44,10 +44,14 @@ public final class LevelScheduler {
         }
         Runnable task;
         while ((task = queue.poll()) != null) {
+            // Each task is one item: a safe point for world pauses before it, and a pause it asks for ends with it.
+            com.multicore.core.WorldPause.beginItem();
             try {
                 task.run();
             } catch (Throwable t) {
                 MultiCore.LOGGER.error("[MultiCore] Scheduled task for {} failed", level.dimension().location(), t);
+            } finally {
+                com.multicore.core.WorldPause.endItem();
             }
         }
     }

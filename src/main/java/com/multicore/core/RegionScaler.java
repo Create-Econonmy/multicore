@@ -58,10 +58,33 @@ public final class RegionScaler {
         return INSTANCE;
     }
 
+    /** Settings a test set, which a config reload in the middle of it must not replace. */
+    private volatile Settings override;
+
     public void configure(Settings s) {
+        this.base = s;
+        if (this.override == null) {
+            this.apply(s);
+        }
+    }
+
+    private volatile Settings base = Settings.DEFAULT;
+
+    private void apply(Settings s) {
         this.settings = s;
         this.worlds.clear();
         this.windowTick = 0;
+    }
+
+    /** For tests: use {@code s} until {@link #clearOverride}, whatever the config says meanwhile. */
+    public void override(Settings s) {
+        this.override = s;
+        this.apply(s);
+    }
+
+    public void clearOverride() {
+        this.override = null;
+        this.apply(this.base);
     }
 
     public Settings settings() {

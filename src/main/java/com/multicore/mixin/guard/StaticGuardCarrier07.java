@@ -12,14 +12,6 @@ import org.spongepowered.asm.mixin.Pseudo;
  */
 @Pseudo
 @Mixin(targets = {
-        "com.rieno.gadgetsandgizmos.content.PhysicsGantryShaftBlockEntity",
-        "com.rieno.gadgetsandgizmos.content.PortableContraptionControllerRuntime",
-        "com.rieno.gadgetsandgizmos.content.RopeWinchUnstickWindow",
-        "com.rieno.gadgetsandgizmos.content.ShipControlModuleRuntime",
-        "com.rieno.gadgetsandgizmos.content.ShipCouplerService",
-        "com.rieno.gadgetsandgizmos.content.ShipDockRegistry",
-        "com.rieno.gadgetsandgizmos.content.ShippingRouteDatabase",
-        "com.rieno.gadgetsandgizmos.content.ShippingScheduleRuntime",
         "com.rieno.gadgetsandgizmos.content.ThrusterBearingBlockEntity",
         "com.rieno.gadgetsandgizmos.content.VectorBearingMountedAssembly",
         "com.rieno.gadgetsandgizmos.content.WirelessDockingTransfer",
@@ -31,8 +23,6 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.rieno.gadgetsandgizmos.content.advanced.NotationExpression$GraphCompiler",
         "com.rieno.gadgetsandgizmos.content.advanced.NotationExpression$Parser",
         "com.rieno.gadgetsandgizmos.content.advanced.NotationExpression$Program",
-        "com.rieno.gadgetsandgizmos.lib.client.render.PhysicsGogglesOverlayRegistry",
-        "com.rieno.gadgetsandgizmos.lib.client.tablet.TabletAppClientRegistry",
         "com.rieno.gadgetsandgizmos.lib.compat.PhysicsStaffInteractionGuard",
         "com.rieno.gadgetsandgizmos.lib.compat.PhysicsStaffPowerTracker",
         "com.rieno.gadgetsandgizmos.lib.compat.PhysicsStaffPowerTracker$StaffState",
@@ -51,7 +41,17 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.rieno.gadgetsandgizmos.lib.scm.ScmControlProbeRegistry",
         "com.rieno.gadgetsandgizmos.lib.shipping.ShipDockScheduler",
         "com.rieno.gadgetsandgizmos.lib.tablet.TabletAppRegistry",
-        "com.rieno.gadgetsandgizmos.neoforge.CTPlayerEvents"
+        "com.rieno.gadgetsandgizmos.neoforge.CTPlayerEvents",
+        "com.rieno.gadgetsandgizmos.neoforge.CTServerFeatureCleanup",
+        "com.rieno.gadgetsandgizmos.neoforge.ControllerGraphWebServer",
+        "com.rieno.gadgetsandgizmos.neoforge.network.AdvancedControllerGraphSnapshotPayload",
+        "com.rieno.gadgetsandgizmos.neoforge.network.AdvancedHudImageUploadPayload",
+        "com.rieno.gadgetsandgizmos.neoforge.network.ContraptionNetworkLinkerSnapshotPayload",
+        "com.rieno.gadgetsandgizmos.registry.CTCreativeTabs",
+        "com.rpgprefabhouses.expansion.ExpansionService",
+        "com.rpgprefabhouses.expansion.Fixtures",
+        "com.rpgprefabhouses.expansion.HouseRegistry",
+        "com.rpgprefabhouses.gen.BS"
 }, remap = false)
 public abstract class StaticGuardCarrier07 {
 }

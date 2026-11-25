@@ -22,7 +22,6 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.forsteri.createendertransmission.blocks.MatterWorldSavedData",
         "com.github.alexthe666.alexsmobs.entity.util.RockyChestplateUtil",
         "com.github.alexthe666.alexsmobs.world.AMWorldData",
-        "com.github.alexthe666.citadel.client.rewards.CitadelCapes",
         "com.github.alexthe666.citadel.server.entity.pathfinding.raycoms.AdvancedPathNavigate",
         "com.github.alexthe666.citadel.server.entity.pathfinding.raycoms.pathjobs.AbstractPathJob",
         "com.github.alexthe666.citadel.server.world.CitadelServerData",
@@ -51,7 +50,8 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.hubessentials.Combat",
         "com.hubessentials.HomeData",
         "com.hubessentials.Hub",
-        "com.hubessentials.Teleports"
+        "com.hubessentials.Teleports",
+        "com.hubessentials.TpaCommands"
 }, remap = false)
 public abstract class StaticGuardCarrier01 {
 }

@@ -12,21 +12,6 @@ import org.spongepowered.asm.mixin.Pseudo;
  */
 @Pseudo
 @Mixin(targets = {
-        "com.simibubi.create.content.logistics.packagerLink.PackagerLinkBlockEntity",
-        "com.simibubi.create.content.redstone.link.RedstoneLinkNetworkHandler$Frequency",
-        "com.simibubi.create.content.trains.RailwaySavedData",
-        "com.simibubi.create.content.trains.bogey.AbstractBogeyBlockEntity",
-        "com.simibubi.create.content.trains.bogey.BogeyStyle$Builder",
-        "com.simibubi.create.content.trains.display.FlapDisplaySection",
-        "com.simibubi.create.content.trains.display.GlobalTrainDisplayData",
-        "com.simibubi.create.content.trains.entity.Carriage",
-        "com.simibubi.create.content.trains.entity.CarriageBogey",
-        "com.simibubi.create.content.trains.graph.EdgeData",
-        "com.simibubi.create.content.trains.graph.EdgePointStorage",
-        "com.simibubi.create.content.trains.graph.EdgePointType",
-        "com.simibubi.create.content.trains.graph.TrackGraphSync",
-        "com.simibubi.create.content.trains.graph.TrackGraphSyncPacket",
-        "com.simibubi.create.foundation.ClientResourceReloadListener",
         "com.simibubi.create.foundation.advancement.AllTriggers",
         "com.simibubi.create.foundation.block.CopperRegistries",
         "com.simibubi.create.foundation.block.connected.CTSpriteShifter",
@@ -51,7 +36,22 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.supermartijn642.core.CoreLib",
         "com.supermartijn642.core.data.condition.ResourceConditions",
         "com.supermartijn642.core.registry.GeneratorRegistrationHandler",
-        "com.supermartijn642.core.registry.RegistrationHandler"
+        "com.supermartijn642.core.registry.RegistrationHandler",
+        "com.supermartijn642.core.registry.Registries",
+        "com.supermartijn642.fusion.model.predicates.ItemWrapperModelPredicate",
+        "com.supermartijn642.rechiseled.chiseling.ChiselingRecipeManagerImpl",
+        "com.supermartijn642.rechiseled.registration.RechiseledRegistrationImpl",
+        "com.tacz.guns.api.GunProperties",
+        "com.tacz.guns.api.GunProperty",
+        "com.tacz.guns.api.resource.ResourceManager",
+        "com.tacz.guns.config.util.HeadShotAABBConfigRead",
+        "com.tacz.guns.resource.GunPackLoader",
+        "com.tacz.guns.resource.VersionChecker",
+        "com.tacz.guns.resource.pojo.data.block.BlockData",
+        "com.tacz.guns.util.CycleTaskHelper",
+        "com.tacz.guns.util.HitboxHelper",
+        "com.taklsforge.create_safe_seating.server.RestManager",
+        "com.teamresourceful.resourcefullib.common.recipe.ingredient.neoforge.IngredientHelperImpl"
 }, remap = false)
 public abstract class StaticGuardCarrier09 {
 }
