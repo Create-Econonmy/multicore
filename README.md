@@ -123,10 +123,16 @@ can it be split. `/multicore status` shows the last split per dimension ("entiti
 What it gains depends on what ticks. Vanilla mobs, item entities, hoppers, furnaces and redstone run fully in parallel
 across regions; Create and other mods outside `regionSafeMods` take turns on the mod lock, as they do between dimensions.
 
-## Create in parallel
+## Create in parallel (experimental, off by default)
 
-Create used to run entirely under the mod lock. Now (`compatibility.threadSafeContent = ["create"]`, and
-`regions.regionSafeContent = ["create"]` for region threads) Create's block entities, entities and blocks (belts,
+**Off by default.** Found on 2026-11-24: with Create's machines unlocked, a locked logistics hub (stock ticker,
+factory gauge, packager) in one dimension or region can pull items out of a vault or chest in another, while that
+vault's own belts, funnels and arms (unlocked) use it on their own thread. Nothing serializes the two, so items can be
+lost or duplicated; the tests do not catch it reliably. Until that is solved, Create stays under the mod lock as it
+always was. What follows describes the experimental mode (`threadSafeContent = ["create"]`, `regionSafeContent =
+["create"]`).
+
+With it on, Create's block entities, entities and blocks (belts,
 shafts, fans, presses, mixers, fluids, contraptions, drills, deployers, arms...) run on several dimension and region
 threads at once; their state lives in the machine and its neighbours, which share one region. What every machine
 shares is guarded by MultiCore:
@@ -143,14 +149,24 @@ Remove `"create"` from `threadSafeContent` (and `regionSafeContent`) to put all 
 `/multicore locks` shows what still takes the lock. `CreateTests.machinesInManyRegionsRunWithoutTheModLock` checks
 motors driving shafts and redstone links in four regions at once.
 
-## Unlock every mod
+## Unlock every mod (experimental, not recommended)
 
 `compatibility.unlockAllMods = true` makes every mod's block entities, entities, blocks and event listeners run in
-parallel without the mod lock, on dimension threads and on region threads (default off). Only `lockedContent` keeps the
-lock (add `"modid:*"` to keep a whole mod under it), plus the locks MultiCore itself adds for mods that need them: Sable's
-native physics, KubeJS scripts, Create's shared managers and the per-thread flags of Open Parties and Claims and Steam 'n'
-Rails. This setting has not been tested with the whole pack: a mod that keeps global state without knowing about threads
-can corrupt it. `/multicore status` shows when it is on; switch it off to go back to the per-mod lists.
+parallel without the mod lock (default off). `lockedContent` / `lockedListeners` still hold the lock, as do the locks
+MultiCore adds itself for Sable, KubeJS and Create's shared managers.
+
+It was run on the 208-mod test pack on 2026-11-24, and it is **not safe there**:
+
+| Found | Where |
+|---|---|
+| `ConcurrentModificationException` in an unsynchronized `HashMap.computeIfAbsent` cache | FallingTree (`isLeafBlock`, from its neighbour-update listener) |
+| `ArrayIndexOutOfBoundsException` in a shared times list | Supplementaries (`HourglassTimesManager`) |
+| `ConcurrentModificationException` iterating Create's track graph from a block that is not Create's | Railways (`GenericCrossingBlock.tick` calling `TrackPropagator`); with Create's own listeners unlocked, a Create track tick hit the same crash and the whole test server went down |
+| Block drops ending up in the wrong dimension | a test of drops caught in the other dimension's thread |
+
+and it gains nothing worth it: the 3-dimension benchmark ran 2.33x faster than one thread with every mod unlocked and
+2.59x with only Create unlocked (the lock is not the bottleneck; the mods' listeners cost microseconds). The defaults
+(every mod but vanilla and NeoForge on the lock) are what the pack was tested with.
 
 ## Commands (op level 3)
 

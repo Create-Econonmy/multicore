@@ -41,6 +41,7 @@ public final class MultiCoreConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> THREAD_SAFE_CONTENT;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> LOCKED_CONTENT;
     public static final ModConfigSpec.BooleanValue UNLOCK_ALL_MODS;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> LOCKED_LISTENERS;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REGION_SAFE_LISTENERS;
     public static final ModConfigSpec.BooleanValue MAP_ENABLED;
     public static final ModConfigSpec.ConfigValue<String> MAP_BIND;
@@ -130,14 +131,18 @@ public final class MultiCoreConfig {
                         "knowing about threads can corrupt it; not tested with the whole pack. Switch it off again if anything odd shows up.",
                         "Add a mod's content to lockedContent (\"modid:*\") to keep just that mod under the lock.")
                 .define("unlockAllMods", false);
+        LOCKED_LISTENERS = b.comment(
+                        "Event listeners (\"modid:EventName\", or \"modid:*\" for all of a mod's) that always hold the mod lock, even with",
+                        "unlockAllMods. Found by running the whole pack unlocked: these keep unsynchronized caches.")
+                .defineListAllowEmpty("lockedListeners", List.of("fallingtree:*"), () -> "", o -> o instanceof String);
         THREAD_SAFE_CONTENT = b.comment(
                         "Mod ids whose block entities, entities and blocks may run on several dimension threads at once, while the",
                         "mod's event listeners still hold the mod lock (unless listed in threadSafeListeners). Content listed in",
-                        "lockedContent still holds the lock. Create is here: its machines (belts, shafts, fans, presses, fluids,",
-                        "contraptions) keep their state per block, and the few things every machine shares (Create's redstone link",
-                        "and stress networks, global logistics manager, static caches) are made safe by MultiCore itself.",
-                        "Remove \"create\" to run all of Create under the mod lock again.")
-                .defineListAllowEmpty("threadSafeContent", List.of("create"), () -> "", o -> o instanceof String);
+                        "lockedContent still holds the lock. EXPERIMENTAL, empty by default. [\"create\"] runs Create's machines in",
+                        "parallel (the few things every machine shares are made safe by MultiCore), but a locked logistics hub (stock",
+                        "ticker, packager) can then pull from a vault or chest in another dimension or region while that vault's own",
+                        "unlocked belts and funnels use it on their own thread: items may be lost or duplicated. Not for a live server.")
+                .defineListAllowEmpty("threadSafeContent", List.of(), () -> "", o -> o instanceof String);
         LOCKED_CONTENT = b.comment(
                         "Block entity, entity and block ids (\"modid:path\", * matches anything) that always hold the mod lock, even",
                         "when their mod is in threadSafeContent. The defaults are the parts of Create that share objects across the",
@@ -148,7 +153,8 @@ public final class MultiCoreConfig {
                         "create:*train*", "create:carriage_contraption", "create:cart_assembler",
                         "create:packager", "create:repackager", "create:package_frogport", "create:package_postbox",
                         "create:packager_link", "create:stock_ticker", "create:redstone_requester", "create:factory_panel",
-                        "create:table_cloth", "create:display_link", "create:toolbox"
+                        "create:table_cloth", "create:display_link", "create:toolbox",
+                        "railways:*", "supplementaries:hourglass"
                 ), () -> "", o -> o instanceof String);
         THREAD_SAFE_LISTENERS = b.comment(
                         "Single event listeners that may run on several dimension threads at once, as \"modid:EventName\"",
@@ -201,9 +207,8 @@ public final class MultiCoreConfig {
                 .defineListAllowEmpty("regionSafeMods", List.of("minecraft", "neoforge", "multicore"), () -> "", o -> o instanceof String);
         REGION_SAFE_CONTENT = b.comment(
                         "Mods whose block entities, entities and blocks (see threadSafeContent) may run on several region threads of",
-                        "the same dimension at once. Create's per-world data is made safe for that; remove \"create\" to run Create's",
-                        "machines under the mod lock on region threads.")
-                .defineListAllowEmpty("regionSafeContent", List.of("create"), () -> "", o -> o instanceof String);
+                        "the same dimension at once. EXPERIMENTAL, empty by default; see threadSafeContent for why.")
+                .defineListAllowEmpty("regionSafeContent", List.of(), () -> "", o -> o instanceof String);
         REGION_SAFE_LISTENERS = b.comment(
                         "Single event listeners that may run on several region threads of one dimension at once (\"modid:EventName\").",
                         "The defaults only touch the entity they are given.")

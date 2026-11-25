@@ -30,6 +30,8 @@ public final class ContentPolicy {
     private static volatile Set<String> safeContent = Set.of();
     /** Every mod's content and listeners count as thread-safe (lockedContent still applies). */
     private static volatile boolean unlockAll;
+    /** Listeners ("modid:EventName" or "modid:*") that hold the lock whatever else is configured. */
+    private static volatile Set<String> lockedListeners = Set.of();
     private static volatile Set<String> regionSafeContent = Set.of();
     /** Ids (globs like "create:*track*") that hold the lock even when their mod's content is thread-safe. */
     private static volatile java.util.List<java.util.regex.Pattern> lockedContent = java.util.List.of();
@@ -61,8 +63,10 @@ public final class ContentPolicy {
      * Mods whose block entities, entities and blocks may run in parallel while their event listeners still hold the mod
      * lock (unless listed in threadSafeListeners), and the ids that stay locked anyway ("create:*track*").
      */
-    public static void configureContent(Collection<? extends String> safeContentMods, Collection<? extends String> locked, boolean unlockEverything) {
+    public static void configureContent(Collection<? extends String> safeContentMods, Collection<? extends String> locked, boolean unlockEverything,
+                                        Collection<? extends String> lockedListenerNames) {
         safeContent = Set.copyOf(safeContentMods);
+        lockedListeners = Set.copyOf(lockedListenerNames);
         unlockAll = unlockEverything;
         java.util.List<java.util.regex.Pattern> patterns = new java.util.ArrayList<>();
         for (String glob : locked) {
@@ -119,6 +123,9 @@ public final class ContentPolicy {
 
     /** A mod's listeners for one event, listed as "modid:EventName" (nested events as "EntityTickEvent$Pre"). */
     public static boolean isSafeListener(String modId, String eventName) {
+        if (lockedListeners.contains(modId + ":" + eventName) || lockedListeners.contains(modId + ":*")) {
+            return false;
+        }
         return unlockAll || safeNamespaces.contains(modId) || safeListeners.contains(modId + ":" + eventName);
     }
 

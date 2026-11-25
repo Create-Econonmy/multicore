@@ -3,12 +3,13 @@
 param(
     [int]$Runs = 6,
     [int]$Minutes = 12,
-    [string]$Out = "$env:TEMP\multicore-hangloop"
+    [string]$Out = "$env:TEMP\multicore-hangloop",
+    [string]$Dir = "run\gametest"
 )
 $proj = Split-Path -Parent $PSScriptRoot
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 New-Item -ItemType Directory -Force $Out | Out-Null
-$log = Join-Path $proj "run\gametest\logs\latest.log"
+$log = Join-Path $proj "$Dir\logs\latest.log"
 
 function Stop-TestServers {
     Get-CimInstance Win32_Process -Filter "Name='java.exe'" |
@@ -17,9 +18,9 @@ function Stop-TestServers {
 }
 
 for ($i = 1; $i -le $Runs; $i++) {
-    Remove-Item (Join-Path $proj "run\gametest\world") -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $proj "$Dir\world") -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item $log -Force -ErrorAction SilentlyContinue
-    $p = Start-Process -FilePath (Join-Path $proj "gradlew.bat") -ArgumentList "runGameTestServer", "--console=plain" `
+    $p = Start-Process -FilePath (Join-Path $proj "gradlew.bat") -ArgumentList "runGameTestServer", "-PgametestDir=$($Dir -replace '\\','/')", "--console=plain" `
         -WorkingDirectory $proj -PassThru -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $Out "run$i.out") -RedirectStandardError (Join-Path $Out "run$i.err")
     $deadline = (Get-Date).AddMinutes($Minutes)

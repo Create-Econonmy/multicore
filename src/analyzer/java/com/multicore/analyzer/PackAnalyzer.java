@@ -347,6 +347,7 @@ public final class PackAnalyzer {
             }
         }
         for (MethodNode mn : cn.methods) {
+            if (!mn.name.equals("<clinit>")) collectRuntimeMutations(report, cn, mn);
             String lastCreated = null;
             boolean callsAddListener = false;
             List<String> lambdaEvents = new ArrayList<>();
@@ -394,6 +395,28 @@ public final class PackAnalyzer {
                 if (params.length > 0 && params[0].getSort() == Type.OBJECT) report.events.add(shortEvent(params[0].getInternalName()) + " <- " + cn.name + "." + mn.name);
             }
         }
+    }
+
+    /**
+     * Static collections that a method (not a static initializer) both reads from the field and mutates: the ones that
+     * can really be modified while the server runs, as opposed to registries filled at startup. Approximate: a mutating
+     * call anywhere in a method that reads the field counts.
+     */
+    private static void collectRuntimeMutations(JarReport report, ClassNode cn, MethodNode mn) {
+        Set<String> fields = new LinkedHashSet<>();
+        boolean mutates = false;
+        for (AbstractInsnNode insn = mn.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (insn instanceof FieldInsnNode fin && fin.getOpcode() == Opcodes.GETSTATIC) {
+                Type t = Type.getType(fin.desc);
+                if (t.getSort() == Type.OBJECT && (isUnsafeCollection(t.getInternalName()) || COLLECTION_INTERFACES.contains(t.getInternalName()))) {
+                    fields.add(fin.owner + "." + fin.name + " : " + t.getInternalName());
+                }
+            } else if (insn instanceof MethodInsnNode min && MUTATORS.contains(min.name)
+                    && (min.owner.startsWith("java/util/") || min.owner.startsWith("it/unimi/"))) {
+                mutates = true;
+            }
+        }
+        if (mutates) for (String f : fields) report.runtimeMutated.add(f + " <- " + cn.name + "." + mn.name);
     }
 
     private static boolean isUnsafeCollection(String internalName) {
@@ -459,6 +482,8 @@ public final class PackAnalyzer {
                         .append(s.target.substring(s.target.lastIndexOf('/') + 1)).append("`: ").append(s.what).append('\n');
             }
         }
+        sb.append("\n## Static collections modified at runtime (field : declared type <- method that reads it and mutates)\n\n");
+        for (JarReport j : jars) for (String c : j.runtimeMutated) sb.append("- ").append(j.modIds.isEmpty() ? j.jar : j.modIds.get(0)).append(": ").append(c).append('\n');
         sb.append("\n## Cross-world calls\n\n");
         for (JarReport j : jars) for (String c : j.crossLevelCalls) sb.append("- ").append(j.jar).append(": ").append(c).append('\n');
         return sb.toString();
@@ -475,6 +500,7 @@ public final class PackAnalyzer {
         Set<String> crossLevelCalls = new LinkedHashSet<>();
         Set<String> events = new LinkedHashSet<>();
         List<String> levelSubclasses = new ArrayList<>();
+        Set<String> runtimeMutated = new LinkedHashSet<>();
         List<StaticState> mixinStaticState = new ArrayList<>();
         List<String> notes = new ArrayList<>();
     }

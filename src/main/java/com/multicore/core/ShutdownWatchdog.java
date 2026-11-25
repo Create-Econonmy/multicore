@@ -22,6 +22,7 @@ public final class ShutdownWatchdog {
 
     public static void onStopping(MinecraftServer server) {
         stopped = false;
+        dumped = false;
         Thread thread = new Thread(() -> watch(server), "MultiCore shutdown watchdog");
         thread.setDaemon(true);
         thread.start();
@@ -39,6 +40,10 @@ public final class ShutdownWatchdog {
                 for (ServerLevel level : server.getAllLevels()) {
                     MultiCore.LOGGER.warn("[MultiCore]   {}: {}", level.dimension().location(), describe(level));
                 }
+                if (!dumped) {
+                    dumped = true;
+                    dumpThreads();
+                }
                 Thread.sleep(10_000L);
             }
         } catch (InterruptedException ignored) {
@@ -46,6 +51,25 @@ public final class ShutdownWatchdog {
         } catch (Throwable t) {
             MultiCore.LOGGER.warn("[MultiCore] Shutdown watchdog failed", t);
         }
+    }
+
+    private static boolean dumped;
+
+    /** Once per shutdown: the server thread and every thread that is blocked or waiting, to see what it waits for. */
+    private static void dumpThreads() {
+        StringBuilder sb = new StringBuilder("[MultiCore] Thread dump while shutting down:");
+        for (java.lang.management.ThreadInfo info : java.lang.management.ManagementFactory.getThreadMXBean().dumpAllThreads(true, true)) {
+            String name = info.getThreadName();
+            if (info.getThreadState() == Thread.State.RUNNABLE && !name.equals("Server thread") && !name.startsWith("MultiCore")) continue;
+            if (name.startsWith("Reference Handler") || name.startsWith("Finalizer") || name.startsWith("Signal Dispatcher")
+                    || name.startsWith("Common-Cleaner") || name.equals("MultiCore shutdown watchdog")) continue;
+            sb.append(System.lineSeparator()).append('"').append(name).append("\" ").append(info.getThreadState());
+            if (info.getLockName() != null) sb.append(" on ").append(info.getLockName());
+            if (info.getLockOwnerName() != null) sb.append(" owned by \"").append(info.getLockOwnerName()).append('"');
+            StackTraceElement[] stack = info.getStackTrace();
+            for (int i = 0; i < Math.min(stack.length, 40); i++) sb.append(System.lineSeparator()).append("    at ").append(stack[i]);
+        }
+        MultiCore.LOGGER.warn(sb.toString());
     }
 
     private static String describe(ServerLevel level) {

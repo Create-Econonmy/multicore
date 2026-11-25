@@ -175,6 +175,27 @@ final class CreateScenarios {
         });
     }
 
+    /** On: Create's content unlocked on dimension and region threads. Off: back to the config. */
+    private static void setCreateUnlocked(boolean on) {
+        java.util.List<String> create = java.util.List.of("create");
+        com.multicore.core.ContentPolicy.configureContent(on ? create : com.multicore.config.MultiCoreConfig.THREAD_SAFE_CONTENT.get(),
+                com.multicore.config.MultiCoreConfig.LOCKED_CONTENT.get(), com.multicore.config.MultiCoreConfig.UNLOCK_ALL_MODS.get(),
+                com.multicore.config.MultiCoreConfig.LOCKED_LISTENERS.get());
+        com.multicore.core.ContentPolicy.configureRegions(com.multicore.config.MultiCoreConfig.REGION_SAFE_MODS.get(),
+                com.multicore.config.MultiCoreConfig.REGION_SAFE_LISTENERS.get(),
+                on ? create : com.multicore.config.MultiCoreConfig.REGION_SAFE_CONTENT.get());
+    }
+
+    private static boolean hasLink(net.minecraft.world.level.block.entity.BlockEntity be) {
+        try {
+            java.lang.reflect.Field link = be.getClass().getDeclaredField("link");
+            link.setAccessible(true);
+            return link.get(be) != null;
+        } catch (ReflectiveOperationException | NullPointerException e) {
+            return false;
+        }
+    }
+
     private static String receiverState(net.minecraft.world.level.block.entity.BlockEntity be, ServerLevel level) {
         try {
             java.lang.reflect.Field link = be.getClass().getDeclaredField("link");
@@ -210,6 +231,9 @@ final class CreateScenarios {
      * managers lock).
      */
     static void machinesInManyRegions(GameTestHelper helper) {
+        // Create's machines are locked by default (threadSafeContent is experimental): unlock them for this test only.
+        setCreateUnlocked(true);
+        helper.runAfterDelay(1190, () -> setCreateUnlocked(false));
         ServerLevel level = helper.getLevel();
         BlockPos o = helper.absolutePos(BlockPos.ZERO);
         int y = 150, count = 4, shafts = 6;
@@ -245,8 +269,6 @@ final class CreateScenarios {
             // Placed as a transmitter and switched after it has ticked, like a player with a wrench (a link that never
             // ticked as a transmitter has no link behaviour to switch).
             level.setBlock(receiver, link, 3);
-            helper.runAfterDelay(60, () -> ((com.simibubi.create.content.redstone.link.RedstoneLinkBlock) link.getBlock())
-                    .toggleMode(level.getBlockState(receiver), level, receiver));
             receivers.add(receiver);
         }
         helper.succeedWhen(() -> {
@@ -258,6 +280,13 @@ final class CreateScenarios {
                     helper.assertTrue(Math.abs(speed) > 0.5F, "the shaft at " + p + " does not turn (speed " + speed + ")");
                 }
                 var receiver = level.getBlockEntity(receivers.get(i));
+                BlockState receiverState = level.getBlockState(receivers.get(i));
+                if (!receiverState.getValue(com.simibubi.create.content.redstone.link.RedstoneLinkBlock.RECEIVER)) {
+                    // Switch it once it has ticked as a transmitter (its chunk may load late).
+                    helper.assertTrue(hasLink(receiver), "the link at " + receivers.get(i) + " has not ticked yet");
+                    ((com.simibubi.create.content.redstone.link.RedstoneLinkBlock) receiverState.getBlock()).toggleMode(receiverState, level, receivers.get(i));
+                    helper.fail("switched the link at " + receivers.get(i) + " to receiver");
+                }
                 var transmitterPos = receivers.get(i).south(-3);
                 var transmitter = level.getBlockEntity(transmitterPos);
                 helper.assertTrue(receiver instanceof com.simibubi.create.content.redstone.link.RedstoneLinkBlockEntity link
@@ -278,6 +307,7 @@ final class CreateScenarios {
             assertStillOn(helper);
             pigs.forEach(Entity::discard);
             for (int i = 0; i < count; i++) force(level, spots.get(i)[0], spots.get(i)[1], false);
+            setCreateUnlocked(false);
         });
     }
 
