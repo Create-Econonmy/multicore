@@ -70,4 +70,80 @@ public final class AutoAdjustTests {
             helper.assertTrue(retried.get().startsWith("MultiCore"), "after the retry the nether ticked on " + retried.get());
         });
     }
+
+    /**
+     * Region threads as needed: the overworld starts unsplit (on its shared dimension thread). Four groups of busy pigs far
+     * apart make its tick slower than the target, so it must get region threads, one step per window, until each group
+     * has one; when the pigs stop working it must give them back, down to none. Short windows (10 ticks) and a low target
+     * (4 ms) so the test does not have to wait minutes.
+     */
+    @GameTest(template = "empty", batch = "autoadjust_scale", timeoutTicks = 600)
+    public static void slowWorldGetsRegionThreadsAndGivesThemBack(GameTestHelper helper) {
+        com.multicore.core.RegionScaler scaler = com.multicore.core.RegionScaler.get();
+        scaler.configure(new com.multicore.core.RegionScaler.Settings(true, 4.0, 2.5, 1, 4, 2, 3, 10));
+        ServerLevel level = helper.getLevel();
+        String dim = level.dimension().location().toString();
+        net.minecraft.core.BlockPos o = helper.absolutePos(net.minecraft.core.BlockPos.ZERO);
+        int[][] spots = {{o.getX() + 4000, o.getZ()}, {o.getX() - 4000, o.getZ()}, {o.getX(), o.getZ() + 4000}, {o.getX(), o.getZ() - 4000}};
+        java.util.concurrent.atomic.AtomicBoolean working = new java.util.concurrent.atomic.AtomicBoolean(true);
+        java.util.List<net.minecraft.world.entity.animal.Pig> pigs = new java.util.ArrayList<>();
+        java.util.Set<java.util.UUID> ids = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        for (int[] spot : spots) {
+            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+                level.setChunkForced((spot[0] >> 4) + dx, (spot[1] >> 4) + dz, true);
+            }
+            for (int i = 0; i < 24; i++) {
+                net.minecraft.world.entity.animal.Pig pig = net.minecraft.world.entity.EntityType.PIG.create(level);
+                pig.setNoAi(true);
+                pig.setNoGravity(true);
+                pig.setInvulnerable(true);
+                pig.moveTo(spot[0] + 0.5 + (i % 6), 150, spot[1] + 0.5 + (i / 6), 0, 0);
+                level.addFreshEntity(pig);
+                pigs.add(pig);
+                ids.add(pig.getUUID());
+            }
+        }
+        Object listener = new Object() {
+            @net.neoforged.bus.api.SubscribeEvent
+            public void tick(net.neoforged.neoforge.event.tick.EntityTickEvent.Pre e) {
+                if (working.get() && ids.contains(e.getEntity().getUUID())) busy(150_000L);
+            }
+        };
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(listener);
+        java.util.concurrent.atomic.AtomicInteger most = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger stoppedAt = new java.util.concurrent.atomic.AtomicInteger(-1);
+        Runnable cleanUp = () -> {
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(listener);
+            pigs.forEach(net.minecraft.world.entity.Entity::discard);
+            for (int[] spot : spots) {
+                for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+                    level.setChunkForced((spot[0] >> 4) + dx, (spot[1] >> 4) + dz, false);
+                }
+            }
+            scaler.configure(new com.multicore.core.RegionScaler.Settings(false, 40, 15, 1, 0, 2, 3, 100));
+        };
+        helper.onEachTick(() -> {
+            int t = scaler.threads(dim);
+            most.accumulateAndGet(t, Math::max);
+            if (working.get() && t >= 4) {
+                working.set(false);
+                stoppedAt.set((int) level.getGameTime());
+            }
+        });
+        helper.runAfterDelay(590, cleanUp);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(most.get() >= 4, "only got " + most.get() + " region threads while slow: " + scaler.describe().get(dim));
+            helper.assertTrue(!working.get(), "still working");
+            helper.assertTrue(scaler.threads(dim) == 1, "still " + scaler.threads(dim) + " region threads after the work stopped: "
+                    + scaler.describe().get(dim));
+            cleanUp.run();
+        });
+    }
+
+    private static void busy(long nanos) {
+        long end = System.nanoTime() + nanos;
+        while (System.nanoTime() < end) {
+            Thread.onSpinWait();
+        }
+    }
 }

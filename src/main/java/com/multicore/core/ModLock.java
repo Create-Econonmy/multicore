@@ -16,7 +16,16 @@ import java.util.concurrent.locks.ReentrantLock;
  * one of them.
  */
 public final class ModLock {
-    private static final ReentrantLock LOCK = new ReentrantLock();
+    /** A ReentrantLock that can say who holds it (for the "waiting too long" report). */
+    private static final class OwnedLock extends ReentrantLock {
+        Thread holder() {
+            return this.getOwner();
+        }
+    }
+
+    private static final OwnedLock LOCK = new OwnedLock();
+    private static final long REPORT_WAIT_NANOS = 10_000_000_000L;
+    private static final java.util.concurrent.atomic.AtomicLong LAST_REPORT = new java.util.concurrent.atomic.AtomicLong();
     private static final int SPIN_TRIES = 200;
     private static final Map<String, LockSource> MOD_SOURCES = new ConcurrentHashMap<>();
     /** Only written and read by the thread holding the lock at depth 1. */
@@ -47,16 +56,25 @@ public final class ModLock {
                 // mod lock first. So a region thread lets go of its read lock while it waits here, and takes it back
                 // once it has the mod lock (nobody can hold the write lock then).
                 int reads = RegionTicker.releaseReadsForWait();
+                // Waiting for the mod lock counts as stopped for a world pause (whoever pauses holds this lock).
+                if (self != null) self.safe++;
                 try {
+                    boolean reported = false;
                     while (!LOCK.tryLock(100, TimeUnit.MICROSECONDS)) {
                         if (self != null) {
                             self.pollOwnTasks();
+                        }
+                        if (!reported && System.nanoTime() - start > REPORT_WAIT_NANOS) {
+                            reported = true;
+                            reportLongWait(source);
                         }
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     LOCK.lock();
                 } finally {
+                    // Holding the mod lock now, so nobody holds a world pause: no need to look for one.
+                    if (self != null) self.safe--;
                     RegionTicker.reacquireReads(reads);
                 }
             }
@@ -72,6 +90,20 @@ public final class ModLock {
             holdStart = System.nanoTime();
             holder = source;
         }
+    }
+
+    /** Someone has waited 10 s for the lock: say who holds it, what for, and where it is (once a minute at most). */
+    private static void reportLongWait(LockSource wanted) {
+        long now = System.nanoTime();
+        long last = LAST_REPORT.get();
+        if (now - last < 60_000_000_000L && last != 0 || !LAST_REPORT.compareAndSet(last, now)) return;
+        Thread owner = LOCK.holder();
+        LockSource what = holder;
+        StringBuilder sb = new StringBuilder();
+        if (owner != null) for (StackTraceElement e : owner.getStackTrace()) sb.append("\n\tat ").append(e);
+        com.multicore.MultiCore.LOGGER.warn("[MultiCore] {} has waited 10 s for the mod lock ({}). It is held by {} ({}) for {}:{}",
+                Thread.currentThread().getName(), wanted, owner == null ? "nobody" : owner.getName(),
+                owner == null ? "-" : owner.getState(), what, sb);
     }
 
     public static void release() {
@@ -106,6 +138,10 @@ public final class ModLock {
      * other code may run while this thread waits.
      */
     public static int suspend() {
+        // A world pause this thread holds ends first (it keeps one hold of the lock): the wait may need the others.
+        if (Thread.currentThread() instanceof LevelThread self) {
+            WorldPause.end(self);
+        }
         int count = LOCK.getHoldCount();
         for (int i = 0; i < count; i++) {
             release();
@@ -172,10 +208,13 @@ public final class ModLock {
         return enterSharedState(SHARED_SOURCES.computeIfAbsent(name, n -> LockSource.of("shared " + n)));
     }
 
-    /** {@link #enterShared}, and on a region thread also pause the other region threads for the rest of the item. */
+    /**
+     * {@link #enterShared}, and pause every other dimension and region thread for the rest of the item (see
+     * {@link WorldPause}): Create's logistics reach vaults and chests anywhere through references they keep.
+     */
     public static boolean enterSharedPausing(String name) {
         boolean held = enterShared(name);
-        RegionTicker.pauseOtherRegions();
+        WorldPause.begin();
         return held;
     }
 

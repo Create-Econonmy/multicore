@@ -66,6 +66,14 @@ public final class MultiCoreMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+        if (mixinClassName.endsWith(".guard.StaticGuardCarrier")) {
+            String simple = targetClassName.substring(targetClassName.lastIndexOf('.') + 1);
+            int wrapped = StaticGuard.isPerWorldState(targetClass.name)
+                    ? MethodLockTransformer.wrapAllMethods(targetClass, "per-world " + simple)
+                    : MethodLockTransformer.wrapMethodsReading(targetClass, StaticGuard.fields(), "static " + simple);
+            StaticGuard.noteWrapped(wrapped);
+            return;
+        }
         if (mixinClassName.endsWith(".sable.RapierNativeLockCarrier")) {
             int wrapped = MethodLockTransformer.wrapMethodsCalling(targetClass, "dev/ryanhcode/sable/physics/impl/rapier/Rapier3D", "sable");
             MultiCore.LOGGER.info("[MultiCore] {}: {} methods that call Sable's native physics now take the mod lock", targetClassName, wrapped);
@@ -76,13 +84,15 @@ public final class MultiCoreMixinPlugin implements IMixinConfigPlugin {
         } else if (mixinClassName.endsWith(".railways.MixinVariablesCarrier")) {
             int rewritten = ThreadLocalStaticsTransformer.rewrite(targetClass, RAILS_MIXIN_VARIABLES, RAILS_FIELDS);
             MultiCore.LOGGER.info("[MultiCore] {}: {} uses of Steam 'n' Rails flag fields made per-thread", targetClassName, rewritten);
-        } else if (mixinClassName.endsWith(".create.SharedStateLockCarrier")) {
-            int wrapped = MethodLockTransformer.wrapAllMethods(targetClass, "create " + targetClassName.substring(targetClassName.lastIndexOf('.') + 1));
+        } else if (mixinClassName.endsWith(".SharedStateLockCarrier")) {
+            String rest = mixinClassName.substring(COMPAT_PACKAGE.length());
+            String modId = rest.substring(0, rest.indexOf('.'));
+            int wrapped = MethodLockTransformer.wrapAllMethods(targetClass, modId + " " + targetClassName.substring(targetClassName.lastIndexOf('.') + 1));
             MultiCore.LOGGER.info("[MultiCore] {}: {} methods take the mod lock (state shared by every machine)", targetClassName, wrapped);
         } else if (mixinClassName.endsWith(".create.LogisticsPauseCarrier")) {
             int wrapped = MethodLockTransformer.wrapAllMethods(targetClass,
                     "create " + targetClassName.substring(targetClassName.lastIndexOf('.') + 1), "enterSharedPausing");
-            MultiCore.LOGGER.info("[MultiCore] {}: {} methods take the mod lock and pause the other region threads", targetClassName, wrapped);
+            MultiCore.LOGGER.info("[MultiCore] {}: {} methods take the mod lock and pause every other tick thread", targetClassName, wrapped);
         } else if (mixinClassName.endsWith(".create.BrassTunnelStaticsCarrier")) {
             int rewritten = ThreadLocalStaticsTransformer.rewrite(targetClass, ThreadStatics.CREATE_BRASS_TUNNEL, CREATE_BRASS_TUNNEL_FIELDS);
             MultiCore.LOGGER.info("[MultiCore] {}: {} uses of the brass tunnel's scratch collections made per-thread", targetClassName, rewritten);

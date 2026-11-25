@@ -311,6 +311,88 @@ public final class RegionTests {
         pullFromAnotherRegion(helper, true);
     }
 
+    /**
+     * The same across dimensions: 24 pigs in the nether keep putting cobblestone into a nether chest on the nether's
+     * thread, while a pig in the overworld takes items out of that chest on the overworld's thread. Reading a block
+     * entity of another dimension must stop every other tick thread for the rest of that tick (a world pause), so not
+     * one item is lost or made up. Before 0.4.0 nothing paused the nether here.
+     */
+    @GameTest(template = "empty", batch = "world_pause_crossdim", timeoutTicks = 400)
+    public static void pullingFromAChestInAnotherDimensionLosesNothing(GameTestHelper helper) {
+        listen();
+        ServerLevel level = helper.getLevel();
+        ServerLevel nether = level.getServer().getLevel(net.minecraft.world.level.Level.NETHER);
+        helper.assertTrue(nether != null, "no nether");
+        BlockPos o = helper.absolutePos(BlockPos.ZERO);
+        int ax = o.getX() + 9000, z = o.getZ() + 5000;
+        int nx = 700, nz = -900;
+        List<Pig> a = pigs(level, ax, z, 1);
+        List<Pig> b = pigs(nether, nx, nz, 24);
+        BlockPos chestPos = new BlockPos(nx, 150, nz + 8);
+        nether.setBlock(chestPos, Blocks.CHEST.defaultBlockState(), 3);
+        AtomicInteger inserted = new AtomicInteger();
+        AtomicInteger pulled = new AtomicInteger();
+        AtomicInteger pullTicks = new AtomicInteger();
+        AtomicInteger insertsOnTickThreads = new AtomicInteger();
+        AtomicBoolean stop = new AtomicBoolean();
+        long pausesBefore = com.multicore.core.Stats.WORLD_PAUSES.sum();
+        for (Pig p : b) {
+            ACTIONS.put(p.getUUID(), e -> {
+                busy(100_000L); // keep the nether busy, so it keeps its own thread
+                if (stop.get() || !(nether.getBlockEntity(chestPos) instanceof ChestBlockEntity chest)) return;
+                if (Thread.currentThread() instanceof com.multicore.core.LevelThread) insertsOnTickThreads.incrementAndGet();
+                for (int slot = 0; slot < chest.getContainerSize(); slot++) {
+                    ItemStack stack = chest.getItem(slot);
+                    if (stack.isEmpty()) {
+                        chest.setItem(slot, new ItemStack(Items.COBBLESTONE));
+                    } else if (stack.getCount() < stack.getMaxStackSize()) {
+                        stack.grow(1);
+                        chest.setChanged();
+                    } else {
+                        continue;
+                    }
+                    inserted.incrementAndGet();
+                    return;
+                }
+            });
+        }
+        ACTIONS.put(a.get(0).getUUID(), e -> {
+            if (stop.get() || !(Thread.currentThread() instanceof com.multicore.core.LevelThread)) return;
+            // Start once the nether pigs are ticking (their chunks may still be generating).
+            if (insertsOnTickThreads.get() < 48) return;
+            if (pullTicks.incrementAndGet() >= 120) {
+                stop.set(true);
+            }
+            if (!(nether.getBlockEntity(chestPos) instanceof ChestBlockEntity chest)) return; // another dimension: world pause
+            for (int n = 0; n < 24; n++) {
+                for (int slot = 0; slot < chest.getContainerSize(); slot++) {
+                    if (!chest.getItem(slot).isEmpty()) {
+                        chest.removeItem(slot, 1);
+                        pulled.incrementAndGet();
+                        break;
+                    }
+                }
+            }
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(stop.get(), "still running (" + pullTicks.get() + " ticks)");
+            int inChest = 0;
+            if (nether.getBlockEntity(chestPos) instanceof ChestBlockEntity chest) {
+                for (int slot = 0; slot < chest.getContainerSize(); slot++) inChest += chest.getItem(slot).getCount();
+            }
+            helper.assertTrue(insertsOnTickThreads.get() > 500, "the nether did not tick on its own thread (" + insertsOnTickThreads.get() + ")");
+            helper.assertTrue(pulled.get() > 100, "only " + pulled.get() + " items were taken out");
+            helper.assertTrue(inChest == inserted.get() - pulled.get(), "items lost or made up: put in " + inserted.get()
+                    + ", taken out " + pulled.get() + ", in the chest " + inChest);
+            long pauses = com.multicore.core.Stats.WORLD_PAUSES.sum() - pausesBefore;
+            helper.assertTrue(pauses > 0, "the access from the overworld never paused the nether");
+            assertRegionsStillOn(helper);
+            nether.removeBlock(chestPos, false);
+            cleanUp(level, a, new int[][] {{ax, z}});
+            cleanUp(nether, b, new int[][] {{nx, nz}});
+        });
+    }
+
     private static void pullFromAnotherRegion(GameTestHelper helper, boolean chestAcrossEdge) {
         listen();
         ServerLevel level = helper.getLevel();

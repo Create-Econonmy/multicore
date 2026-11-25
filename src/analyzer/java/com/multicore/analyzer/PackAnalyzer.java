@@ -132,6 +132,7 @@ public final class PackAnalyzer {
         Files.writeString(outDir.resolve("report.json"), gson.toJson(analyzer.jars));
         Files.writeString(outDir.resolve("mixin-targets.json"), gson.toJson(analyzer.byTarget()));
         Files.writeString(outDir.resolve("report.md"), analyzer.markdown());
+        writeGuard(outDir);
         System.out.println("Scanned " + analyzer.jars.size() + " jars -> " + outDir.toAbsolutePath());
     }
 
@@ -178,6 +179,9 @@ public final class PackAnalyzer {
             try {
                 JsonObject o = JsonParser.parseString(json).getAsJsonObject();
                 String pkg = o.has("package") ? o.get("package").getAsString().replace('.', '/') : "";
+                // Mixin plugins (and the mixin package) load before mixins apply: never patch them.
+                if (o.has("plugin")) EARLY_CLASSES.add(o.get("plugin").getAsString().replace('.', '/'));
+                if (!pkg.isEmpty()) EARLY_PACKAGES.add(pkg + "/");
                 for (String side : List.of("mixins", "server", "client")) {
                     if (!o.has(side) || !o.get(side).isJsonArray()) continue;
                     for (JsonElement el : o.getAsJsonArray(side)) {
@@ -206,6 +210,8 @@ public final class PackAnalyzer {
                 if (!side.equals("client") && !targets.isEmpty()) scanMixinStatics(report, cn, targets, classes);
             }
             if (side == null || !side.equals("client")) scanHazards(report, cn);
+            // Only real mods: libraries (MixinExtras, Kotlin...) load before mixins and cannot be patched.
+            if (side == null && !report.modIds.isEmpty()) scanGuard(cn);
         }
         jars.add(report);
         for (String n : nested) scanJar(n.substring(n.lastIndexOf('/') + 1), entries.get(n), report.jar);
@@ -417,6 +423,158 @@ public final class PackAnalyzer {
             }
         }
         if (mutates) for (String f : fields) report.runtimeMutated.add(f + " <- " + cn.name + "." + mn.name);
+    }
+
+    // ---- static guard: shared static collections changed while the game runs, and every class reading them ----
+
+    /** Field ("owner.name") -> names of the methods (not static initialisers) that read it and mutate a collection. */
+    private static final Map<String, Set<String>> GUARD_MUTATORS = new TreeMap<>();
+    /** Class -> collection-typed static fields its methods read. Mod classes only, no mixins, no interfaces. */
+    private static final Map<String, Set<String>> GUARD_READS = new TreeMap<>();
+    private static final Set<String> GUARD_OWNERS = new java.util.HashSet<>();
+    /** Methods that only run while the game starts or reloads (registries, configs, data packs). */
+    private static final Pattern STARTUP_METHOD = Pattern.compile("(?i)^(<init>|register.*|init.*|setup.*|bootstrap.*|load.*|reload.*|"
+            + "onregister.*|onload.*|onresourcemanagerreload|apply|prepare|gather.*|commonsetup.*|clientsetup.*|serversetup.*|"
+            + "onserverstart.*|onserverstop.*|onconfig.*|readconfig.*|construct.*|lambda\\$(register|init|setup|bootstrap|load|reload|onregister|onconfig|commonsetup).*)$");
+
+    /** Class -> super class, for every mod class (to find mod SavedData classes). */
+    private static final Map<String, String> SUPERS = new java.util.HashMap<>();
+    private static final Set<String> INTERFACES = new java.util.HashSet<>();
+
+    private static void scanGuard(ClassNode cn) {
+        GUARD_OWNERS.add(cn.name);
+        if (cn.superName != null) SUPERS.put(cn.name, cn.superName);
+        if ((cn.access & Opcodes.ACC_INTERFACE) != 0) INTERFACES.add(cn.name);
+        boolean iface = (cn.access & Opcodes.ACC_INTERFACE) != 0;
+        for (MethodNode mn : cn.methods) {
+            if (mn.name.equals("<clinit>") || mn.instructions == null) continue;
+            Set<String> read = new LinkedHashSet<>();
+            boolean mutates = false;
+            for (AbstractInsnNode insn = mn.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                if (insn instanceof FieldInsnNode fin && fin.getOpcode() == Opcodes.GETSTATIC) {
+                    Type t = Type.getType(fin.desc);
+                    if (t.getSort() == Type.OBJECT && (isUnsafeCollection(t.getInternalName()) || COLLECTION_INTERFACES.contains(t.getInternalName()))) {
+                        read.add(fin.owner + "." + fin.name);
+                    }
+                } else if (insn instanceof MethodInsnNode min && MUTATORS.contains(min.name)
+                        && (min.owner.startsWith("java/util/") || min.owner.startsWith("it/unimi/"))) {
+                    mutates = true;
+                }
+            }
+            if (read.isEmpty()) continue;
+            if (mutates) for (String f : read) GUARD_MUTATORS.computeIfAbsent(f, k -> new java.util.TreeSet<>()).add(mn.name);
+            if (!iface) GUARD_READS.computeIfAbsent(cn.name, k -> new java.util.TreeSet<>()).addAll(read);
+        }
+        GUARD_REFS.put(cn.name, referencedTypes(cn));
+        if (!iface) {
+            for (org.objectweb.asm.tree.FieldNode fn : cn.fields) {
+                if (fn.signature != null && LEVEL_KEY.matcher(fn.signature).matches()) {
+                    LEVEL_KEYED.add(cn.name);
+                    break;
+                }
+            }
+        }
+    }
+
+    /** Class -> every type its code refers to (patching a class recomputes its frames, which loads these). */
+    private static final Map<String, Set<String>> GUARD_REFS = new java.util.HashMap<>();
+    private static final java.util.List<String> CLIENT_ONLY = java.util.List.of("net/minecraft/client/", "com/mojang/blaze3d/", "org/lwjgl/",
+            "net/neoforged/neoforge/client/");
+    private static final java.util.List<String> PLATFORM = java.util.List.of("java/", "javax/", "jdk/", "sun/", "net/minecraft/", "com/mojang/",
+            "net/neoforged/", "it/unimi/", "com/google/", "org/slf4j/", "org/apache/", "io/netty/", "org/joml/", "org/jetbrains/",
+            "org/objectweb/", "org/spongepowered/", "com/llamalad7/", "cpw/", "org/intellij/", "com/electronwill/", "net/jodah/",
+            "org/openjdk/", "oshi/", "joptsimple/", "org/checkerframework/", "javax/annotation/", "com/sun/");
+
+    private static Set<String> referencedTypes(ClassNode cn) {
+        Set<String> out = new java.util.HashSet<>();
+        java.util.function.Consumer<Type> add = new java.util.function.Consumer<>() {
+            @Override
+            public void accept(Type t) {
+                if (t.getSort() == Type.ARRAY) t = t.getElementType();
+                if (t.getSort() == Type.OBJECT) out.add(t.getInternalName());
+                else if (t.getSort() == Type.METHOD) {
+                    for (Type a : t.getArgumentTypes()) this.accept(a);
+                    this.accept(t.getReturnType());
+                }
+            }
+        };
+        for (MethodNode mn : cn.methods) {
+            add.accept(Type.getMethodType(mn.desc));
+            if (mn.tryCatchBlocks != null) for (var tc : mn.tryCatchBlocks) if (tc.type != null) out.add(tc.type);
+            if (mn.instructions == null) continue;
+            for (AbstractInsnNode insn = mn.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                if (insn instanceof TypeInsnNode t) add.accept(Type.getObjectType(t.desc));
+                else if (insn instanceof FieldInsnNode f) { out.add(f.owner); add.accept(Type.getType(f.desc)); }
+                else if (insn instanceof MethodInsnNode m) { if (!m.owner.startsWith("[")) out.add(m.owner); add.accept(Type.getMethodType(m.desc)); }
+                else if (insn instanceof org.objectweb.asm.tree.LdcInsnNode l && l.cst instanceof Type t) add.accept(t);
+            }
+        }
+        return out;
+    }
+
+    private static final Set<String> EARLY_CLASSES = new java.util.HashSet<>();
+    private static final Set<String> EARLY_PACKAGES = new java.util.HashSet<>();
+    /** Classes with a collection keyed by world (Map<Level, ...>): a per-world registry every region thread shares. */
+    private static final Set<String> LEVEL_KEYED = new java.util.TreeSet<>();
+    private static final Pattern LEVEL_KEY = Pattern.compile("^L[\\w/$]*(Map|Cache)<(Lnet/minecraft/world/level/(Level|LevelAccessor|LevelReader|BlockGetter|CommonLevelAccessor|WorldGenLevel);"
+            + "|Lnet/minecraft/server/level/ServerLevel;|Lnet/minecraft/resources/ResourceKey<Lnet/minecraft/world/level/Level;>;).*");
+
+    /** Would patching this class load a client-only class or one that is not installed, or does it load before mixins? */
+    private static boolean unsafeToPatch(String cls) {
+        if (EARLY_CLASSES.contains(cls)) return true;
+        for (String p : EARLY_PACKAGES) if (cls.startsWith(p)) return true;
+        // A mixin plugin's own package (its helpers load with it).
+        for (String e : EARLY_CLASSES) {
+            int slash = e.lastIndexOf('/');
+            if (slash > 0 && cls.startsWith(e.substring(0, slash + 1))) return true;
+        }
+        Set<String> refs = GUARD_REFS.get(cls);
+        if (refs == null) return true;
+        for (String r : refs) {
+            for (String p : CLIENT_ONLY) if (r.startsWith(p)) return true;
+            if (GUARD_OWNERS.contains(r)) continue;
+            boolean platform = false;
+            for (String p : PLATFORM) if (r.startsWith(p)) { platform = true; break; }
+            if (!platform) return true;
+        }
+        return false;
+    }
+
+    /** Writes guard-fields.txt and guard-classes.txt (see tools/generate-static-guard.py). */
+    private static void writeGuard(Path outDir) throws IOException {
+        Set<String> fields = new java.util.TreeSet<>();
+        GUARD_MUTATORS.forEach((field, methods) -> {
+            String owner = field.substring(0, field.lastIndexOf('.'));
+            if (!GUARD_OWNERS.contains(owner) || owner.startsWith("com/multicore/")) return;
+            for (String m : methods) {
+                if (!STARTUP_METHOD.matcher(m).matches()) {
+                    fields.add(field);
+                    return;
+                }
+            }
+        });
+        Set<String> classes = new java.util.TreeSet<>();
+        GUARD_READS.forEach((cls, read) -> {
+            if (cls.startsWith("com/multicore/") || unsafeToPatch(cls)) return;
+            for (String f : read) if (fields.contains(f)) { classes.add(cls); return; }
+        });
+        Files.writeString(outDir.resolve("guard-fields.txt"), String.join("\n", fields) + "\n");
+        Files.writeString(outDir.resolve("guard-classes.txt"), String.join("\n", classes) + "\n");
+        // Per-world state of mods (SavedData): shared by every region thread of that world.
+        Set<String> savedData = new java.util.TreeSet<>();
+        for (String cls : SUPERS.keySet()) {
+            if (cls.startsWith("com/multicore/") || INTERFACES.contains(cls) || unsafeToPatch(cls)) continue;
+            for (String c = cls; c != null; c = SUPERS.get(c)) {
+                if ("net/minecraft/world/level/saveddata/SavedData".equals(SUPERS.get(c))) {
+                    savedData.add(cls);
+                    break;
+                }
+            }
+        }
+        for (String cls : LEVEL_KEYED) if (!cls.startsWith("com/multicore/") && !unsafeToPatch(cls)) savedData.add(cls);
+        Files.writeString(outDir.resolve("guard-saveddata.txt"), String.join("\n", savedData) + "\n");
+        System.out.println("Static guard: " + savedData.size() + " mod SavedData classes");
+        System.out.println("Static guard: " + fields.size() + " shared static collections, read by " + classes.size() + " classes");
     }
 
     private static boolean isUnsafeCollection(String internalName) {

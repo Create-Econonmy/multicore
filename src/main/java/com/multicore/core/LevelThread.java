@@ -40,6 +40,15 @@ public class LevelThread extends Thread {
     long regionExtraNanos;
     /** The dimension this thread is splitting right now (see {@link RegionTicker}); its tasks only run under the split's write lock. */
     volatile ServerLevel splitLevel;
+    /**
+     * Above zero while this thread is idle, waiting, or stopped for someone's {@link WorldPause}: it is not touching
+     * the world then. Only this thread writes it.
+     */
+    volatile int safe = 1;
+    /** Nesting of block entity / entity ticks (see {@link WorldPause#beginItem}). Only this thread uses it. */
+    int itemDepth;
+    /** This thread took the mod lock for a world pause it holds. */
+    boolean pauseModLock;
 
     /** For {@link RegionThread}. */
     protected LevelThread(String name, ServerLevel level, ClassLoader contextLoader) {
@@ -111,14 +120,19 @@ public class LevelThread extends Thread {
 
     @Override
     public void run() {
-        while (!this.retired) {
-            Phase phase = this.pending;
-            if (phase == null) {
-                LockSupport.park(this);
-                continue;
+        WorldPause.register(this);
+        try {
+            while (!this.retired) {
+                Phase phase = this.pending;
+                if (phase == null) {
+                    LockSupport.park(this);
+                    continue;
+                }
+                this.pending = null;
+                this.runPhase(phase);
             }
-            this.pending = null;
-            this.runPhase(phase);
+        } finally {
+            WorldPause.unregister(this);
         }
     }
 
@@ -133,15 +147,23 @@ public class LevelThread extends Thread {
             this.lockWaitNanos = 0;
             this.regionExtraNanos = 0;
             ServerLevel[] mine = this.levels;
-            for (int i = 0; i < mine.length; i++) {
-                long t0 = System.nanoTime();
-                try {
-                    tickLevel(mine[i], phase.hasTimeLeft());
-                    com.multicore.map.ThreadMap.afterLevelTick(mine[i]);
-                } catch (Throwable t) {
-                    phase.fail(mine[i], t);
+            WorldPause.leaveSafe(this);
+            try {
+                for (int i = 0; i < mine.length; i++) {
+                    long t0 = System.nanoTime();
+                    try {
+                        tickLevel(mine[i], phase.hasTimeLeft());
+                        com.multicore.map.ThreadMap.afterLevelTick(mine[i]);
+                    } catch (Throwable t) {
+                        phase.fail(mine[i], t);
+                    } finally {
+                        this.itemDepth = 0;
+                        WorldPause.end(this);
+                    }
+                    this.levelTickNanos[i] = System.nanoTime() - t0;
                 }
-                this.levelTickNanos[i] = System.nanoTime() - t0;
+            } finally {
+                WorldPause.enterSafe(this);
             }
             this.lastTickNanos = System.nanoTime() - start;
             this.lastLockWaitNanos = this.lockWaitNanos;

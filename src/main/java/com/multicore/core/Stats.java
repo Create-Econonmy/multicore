@@ -21,6 +21,12 @@ public final class Stats {
     public static final LongAdder CROSS_LEVEL_LOADS = new LongAdder();
     public static final LongAdder MOD_LOCK_ACQUIRES = new LongAdder();
     public static final LongAdder MOD_LOCK_WAIT_NANOS = new LongAdder();
+    public static final LongAdder WORLD_PAUSES = new LongAdder();
+    public static final LongAdder WORLD_PAUSE_WAIT_NANOS = new LongAdder();
+    public static final LongAdder WORLD_PAUSE_TIMEOUTS = new LongAdder();
+    public static final LongAdder WORLD_PAUSES_SKIPPED = new LongAdder();
+    public static final LongAdder PLAYER_TICKS_MOVED = new LongAdder();
+    public static final LongAdder PLAYER_PACKETS_MOVED = new LongAdder();
 
     /** Main-thread only. */
     static volatile long lastPhaseNanos;

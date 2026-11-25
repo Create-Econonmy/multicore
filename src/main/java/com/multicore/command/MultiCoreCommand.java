@@ -147,6 +147,16 @@ public final class MultiCoreCommand {
         if (com.multicore.core.RegionGovernor.enabled() && com.multicore.core.RegionTicker.enabled()) {
             com.multicore.core.RegionGovernor.describe().forEach((k, what) -> line(src, "  only when faster, " + k + ": ", what, ChatFormatting.WHITE));
         }
+        if (com.multicore.core.RegionScaler.get().settings().enabled() && com.multicore.core.RegionTicker.enabled()) {
+            com.multicore.core.RegionScaler.get().describe().forEach((dim, what) -> line(src, "  auto-scale, " + dim + ": ", what, ChatFormatting.WHITE));
+        }
+        line(src, "Static guard: ", String.format(Locale.ROOT, "%d shared static collections and %d per-world state classes; %d mod methods take the lock",
+                com.multicore.compat.StaticGuard.fieldCount(), com.multicore.compat.StaticGuard.perWorldCount(), com.multicore.compat.StaticGuard.wrapped()),
+                ChatFormatting.GRAY);
+        line(src, "World pauses: ", String.format(Locale.ROOT, "%d (%.1f ms waiting in all, %d timeouts)",
+                Stats.WORLD_PAUSES.sum(), Stats.WORLD_PAUSE_WAIT_NANOS.sum() / 1e6, Stats.WORLD_PAUSE_TIMEOUTS.sum()), ChatFormatting.GRAY);
+        line(src, "Players on dimension threads: ", com.multicore.core.PlayerThreads.enabled() ? String.format(Locale.ROOT,
+                "%d player ticks, %d packets", Stats.PLAYER_TICKS_MOVED.sum(), Stats.PLAYER_PACKETS_MOVED.sum()) : "off", ChatFormatting.GRAY);
         // Everything else in the server's tick (player packets and movement, commands, mods' server-tick work, autosave)
         // is vanilla's main-thread work: what is left of the tick after the parts MultiCore measures.
         double measured = Stats.avgPreMs + Stats.avgWaitMs + Stats.avgDeferredMs + Stats.avgSerialLevelsMs + Stats.avgPostMs;

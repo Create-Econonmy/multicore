@@ -71,6 +71,35 @@ public final class MethodLockTransformer {
         return wrappers.size();
     }
 
+    /**
+     * Wraps every method that reads one of {@code fields} ("owner/Name.field", static) in {@code ModLock.enterShared}:
+     * the static guard (see StaticGuardCarrier). Lambdas count too (they are often where the collection is changed);
+     * constructors and static initialisers do not.
+     */
+    public static int wrapMethodsReading(ClassNode node, java.util.Set<String> fields, String lockName) {
+        if ((node.access & Opcodes.ACC_INTERFACE) != 0) return 0;
+        List<MethodNode> wrappers = new ArrayList<>();
+        for (MethodNode method : node.methods) {
+            if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE | Opcodes.ACC_BRIDGE)) != 0
+                    || method.name.startsWith("<") || method.name.startsWith(PREFIX) || !reads(method, fields)) {
+                continue;
+            }
+            wrappers.add(wrap(node, method, lockName, "enterShared"));
+        }
+        node.methods.addAll(wrappers);
+        return wrappers.size();
+    }
+
+    private static boolean reads(MethodNode method, java.util.Set<String> fields) {
+        for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (insn instanceof org.objectweb.asm.tree.FieldInsnNode f && f.getOpcode() == Opcodes.GETSTATIC
+                    && fields.contains(f.owner + "." + f.name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean calls(MethodNode method, String owner) {
         for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
             if (insn instanceof MethodInsnNode call && call.owner.equals(owner)) {

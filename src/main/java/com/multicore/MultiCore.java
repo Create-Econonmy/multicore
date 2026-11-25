@@ -42,6 +42,9 @@ public final class MultiCore {
             // Logs whether dimthread or MultiCore ticks the dimensions (dimthread's hook may run before MultiCore's).
             DimThreadCompat.isTicking(e.getServer());
             com.multicore.map.ThreadMap.onServerStarted(e.getServer());
+            LOGGER.info("[MultiCore] Static guard: {} shared static collections and {} per-world state classes listed; {} mod methods "
+                    + "take the lock so far (more as classes load)", com.multicore.compat.StaticGuard.fieldCount(),
+                    com.multicore.compat.StaticGuard.perWorldCount(), com.multicore.compat.StaticGuard.wrapped());
         });
         NeoForge.EVENT_BUS.addListener(ServerStoppingEvent.class, e -> {
             com.multicore.map.ThreadMap.onServerStopping(e.getServer());
@@ -84,6 +87,13 @@ public final class MultiCore {
         com.multicore.core.RegionTicker.configure(MultiCoreConfig.REGIONS_ENABLED.get(), MultiCoreConfig.REGION_SIZE_CHUNKS.get(),
                 MultiCoreConfig.REGION_THREADS.get(), MultiCoreConfig.REGION_MIN_ENTITIES.get(),
                 MultiCoreConfig.REGION_MIN_BLOCK_ENTITIES.get(), MultiCoreConfig.REGION_EXCLUDED_DIMENSIONS.get());
+        int maxShift = Math.max(1, 31 - Integer.numberOfLeadingZeros(Math.max(2, MultiCoreConfig.REGION_SIZE_CHUNKS.get())));
+        int minShift = Math.min(maxShift, Math.max(1, 31 - Integer.numberOfLeadingZeros(Math.max(2, MultiCoreConfig.REGION_MIN_SIZE_CHUNKS.get()))));
+        com.multicore.core.RegionScaler.get().configure(new com.multicore.core.RegionScaler.Settings(
+                // GameTests check splits on small worlds (always threadsPerDimension there); RegionTests turn it on for its own test.
+                MultiCoreConfig.REGION_AUTO_SCALE.get() && System.getProperty("neoforge.enabledGameTestNamespaces") == null,
+                MultiCoreConfig.REGION_TARGET_MS.get(), MultiCoreConfig.REGION_RELAX_MS.get(),
+                2, MultiCoreConfig.REGION_THREADS.get(), minShift, maxShift, 100));
         // GameTests check that splits happen on small test worlds, where one thread is often faster.
         com.multicore.core.RegionGovernor.setEnabled(MultiCoreConfig.REGION_ONLY_WHEN_FASTER.get()
                 && System.getProperty("neoforge.enabledGameTestNamespaces") == null);

@@ -1,0 +1,35 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.multicore.mixin",
+  "plugin": "com.multicore.compat.MultiCoreMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "guard.StaticGuardCarrier00",
+    "guard.StaticGuardCarrier01",
+    "guard.StaticGuardCarrier02",
+    "guard.StaticGuardCarrier03",
+    "guard.StaticGuardCarrier04",
+    "guard.StaticGuardCarrier05",
+    "guard.StaticGuardCarrier06",
+    "guard.StaticGuardCarrier07",
+    "guard.StaticGuardCarrier08",
+    "guard.StaticGuardCarrier09",
+    "guard.StaticGuardCarrier10",
+    "guard.StaticGuardCarrier11",
+    "guard.StaticGuardCarrier12",
+    "guard.StaticGuardCarrier13",
+    "guard.StaticGuardCarrier14",
+    "guard.StaticGuardCarrier15",
+    "guard.StaticGuardCarrier16",
+    "guard.StaticGuardCarrier17",
+    "guard.StaticGuardCarrier18",
+    "guard.StaticGuardCarrier19",
+    "guard.StaticGuardCarrier20",
+    "guard.StaticGuardCarrier21",
+    "guard.StaticGuardCarrier22"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

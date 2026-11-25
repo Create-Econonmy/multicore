@@ -20,10 +20,12 @@ public final class ManagedWait {
         long nextWarn = start + WARN_AFTER_NANOS;
         // A region thread lets go of its region's read lock, so its dimension thread can run the chunk tasks it waits for.
         int region = RegionTicker.beginWait();
+        if (self != null) WorldPause.enterSafe(self);
         try {
             waitLoop(done, what, self, start, nextWarn);
         } finally {
             RegionTicker.endWait(region);
+            if (self != null) WorldPause.leaveSafe(self);
         }
     }
 

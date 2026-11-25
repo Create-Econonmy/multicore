@@ -46,6 +46,9 @@ public abstract class LevelMixin implements LevelThreadAccess {
         if (current != original && current instanceof LevelThread) {
             if (TickThreads.isForeignLevelThread((Level) (Object) this)) {
                 CrossLevel.noteAccess("reads a block entity in another dimension", (Level) (Object) this);
+                // What it does with it (take items, read its state) must not race that dimension's own thread: stop
+                // every other tick thread for the rest of this item.
+                com.multicore.core.WorldPause.begin();
             }
             return current;
         }

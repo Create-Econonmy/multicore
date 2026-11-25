@@ -13,6 +13,7 @@
     "compat.create.ShapeCachesMixin",
     "compat.create.SharedStateLockCarrier",
     "compat.createthreadedtrains.GlobalRailwayManagerMixin",
+    "compat.fallingtree.BlockCachesMixin",
     "compat.openpartiesandclaims.ClaimCaptureCarrier",
     "compat.openpartiesandclaims.ClaimCaptureInterfaceCarrier",
     "compat.ponder.WorldAttachedMixin",
@@ -21,6 +22,7 @@
     "compat.sable.RapierNativeLockCarrier",
     "compat.sable.RapierPhysicsPipelineMixin",
     "compat.sable.SubLevelPhysicsSystemMixin",
+    "compat.supplementaries.SharedStateLockCarrier",
     "core.BlockableEventLoopAccessor",
     "core.ChunkMapAccessor",
     "core.BlockEntityTypeMixin",
@@ -38,6 +40,9 @@
     "core.LevelMixin",
     "core.MinecraftServerAccessor",
     "core.MinecraftServerMixin",
+    "core.PacketUtilsMixin",
+    "core.PlayerConnectionMixins",
+    "core.ServerConnectionListenerMixin",
     "core.ServerChunkCacheMixin",
     "core.ServerLevelMixin",
     "core.ServerPlayerMixin",
@@ -53,6 +58,7 @@
     "safety.BlockCapturedDropsMixin",
     "safety.CommandsMixin",
     "safety.DimensionDataStorageMixin",
+    "safety.FakePlayerFactoryMixin",
     "safety.LegacyRandomSourceMixin",
     "safety.MapItemSavedDataMixin",
     "safety.PlayerScoresMixin",
@@ -63,7 +69,8 @@
     "safety.ScoreboardMixin",
     "safety.ServerCommonPacketListenerImplMixin",
     "safety.ServerFunctionManagerMixin",
-    "test.GameTestServerProfileCacheMixin"
+    "test.GameTestServerProfileCacheMixin",
+    "test.ServerConnectionListenerAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

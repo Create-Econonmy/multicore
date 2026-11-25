@@ -70,14 +70,19 @@ public final class RegionThread extends LevelThread {
 
     @Override
     public void run() {
-        while (!this.isRetired()) {
-            RegionTicker.Split s = this.pending;
-            if (s == null) {
-                LockSupport.park(this);
-                continue;
+        WorldPause.register(this);
+        try {
+            while (!this.isRetired()) {
+                RegionTicker.Split s = this.pending;
+                if (s == null) {
+                    LockSupport.park(this);
+                    continue;
+                }
+                this.pending = null;
+                s.work(this);
             }
-            this.pending = null;
-            s.work(this);
+        } finally {
+            WorldPause.unregister(this);
         }
     }
 

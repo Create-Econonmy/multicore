@@ -127,6 +127,10 @@ public final class ParallelTicker {
         if (msg != null) {
             MultiCore.LOGGER.info("[MultiCore] auto-adjust: {}", msg);
         }
+        String scaled = RegionScaler.get().endTick();
+        if (scaled != null) {
+            MultiCore.LOGGER.info("[MultiCore] region threads: {}", scaled);
+        }
     }
 
     /** Main thread only. Snapshot for /multicore status. */
@@ -305,6 +309,7 @@ public final class ParallelTicker {
                 String id = levels[i].dimension().location().toString();
                 double ms = nanos[i] / 1e6;
                 auto.recordRegion(id, ms, levels[i].players().size());
+                RegionScaler.get().record(id, ms, RegionTicker.takeTickRegions(id));
                 this.costMs.merge(id, ms, (old, now) -> old * 0.9 + now * 0.1);
             }
         }

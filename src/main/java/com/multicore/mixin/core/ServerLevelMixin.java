@@ -10,6 +10,7 @@ import com.multicore.core.CrossLevel;
 import com.multicore.core.LevelThread;
 import com.multicore.core.ModLock;
 import com.multicore.core.SerialQueue;
+import com.multicore.core.WorldPause;
 import java.util.function.BooleanSupplier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -26,27 +27,40 @@ public abstract class ServerLevelMixin {
     @Inject(method = "tick", at = @At("HEAD"))
     private void multicore$runScheduledTasks(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
         LevelScheduler.runPending((ServerLevel) (Object) this);
+        com.multicore.core.PlayerThreads.runQueuedPackets((ServerLevel) (Object) this);
+    }
+
+    /** Vanilla ticks the connections after the levels: players whose dimension has its own thread tick here. */
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void multicore$tickPlayerConnections(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
+        com.multicore.core.PlayerThreads.tickOwedConnections((ServerLevel) (Object) this);
     }
 
     @Inject(method = "close", at = @At("HEAD"))
     private void multicore$forgetScheduledTasks(CallbackInfo ci) {
         LevelScheduler.forget((ServerLevel) (Object) this);
+        com.multicore.core.PlayerThreads.forget((ServerLevel) (Object) this);
     }
 
     // ---- Entities from unsafe mods tick under the mod lock ----
 
     @WrapOperation(method = "tickNonPassenger", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;tick()V"))
     private void multicore$lockEntityTick(Entity entity, Operation<Void> original) {
-        LockSource lock = ContentPolicy.lockFor(entity);
-        if (lock != null) {
-            ModLock.acquire(lock);
-            try {
+        WorldPause.beginItem();
+        try {
+            LockSource lock = ContentPolicy.lockFor(entity);
+            if (lock != null) {
+                ModLock.acquire(lock);
+                try {
+                    original.call(entity);
+                } finally {
+                    ModLock.release();
+                }
+            } else {
                 original.call(entity);
-            } finally {
-                ModLock.release();
             }
-        } else {
-            original.call(entity);
+        } finally {
+            WorldPause.endItem();
         }
     }
 

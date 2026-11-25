@@ -93,10 +93,20 @@ public final class RegionTicker {
         return 1 << shift;
     }
 
+    /** Upper limit of region threads per world: the config value, or 0 = every logical core. */
     public static int threadsPerDimension() {
         int t = threads;
         if (t > 0) return t;
-        return Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors() - 2));
+        return Math.max(2, Runtime.getRuntime().availableProcessors());
+    }
+
+    /** Per world, the most regions a split found this tick. Read and cleared by the main thread after the phase. */
+    private static final Map<String, Integer> TICK_REGIONS = new ConcurrentHashMap<>();
+
+    /** Main thread: the most regions {@code dim}'s splits found since the last call (1 = no split). */
+    static int takeTickRegions(String dim) {
+        Integer n = TICK_REGIONS.remove(dim);
+        return n == null ? 1 : n;
     }
 
     public static Map<String, String> lastSplits() {
@@ -192,7 +202,9 @@ public final class RegionTicker {
 
     private static <T> void run(ServerLevel level, List<T> items, int[] cx, int[] cz, Consumer<T> action, String what, int min, boolean entities) {
         String dim = level.dimension().location().toString();
-        int maxJobs = threadsPerDimension();
+        // How many threads and how fine a cut this world gets is worked out by RegionScaler from its tick times.
+        int maxJobs = Math.min(threadsPerDimension(), RegionScaler.get().threads(dim));
+        int shift = Math.min(RegionTicker.shift, RegionScaler.get().shift(dim));
         boolean bigEnough = items.size() >= min;
         RegionPlan plan = bigEnough && RegionGovernor.allowSplit(dim, entities) ? RegionPlan.plan(cx, cz, items.size(), shift, maxJobs) : null;
         if (plan == null) {
@@ -231,6 +243,7 @@ public final class RegionTicker {
         // The queued changes are part of what the split costs.
         RegionGovernor.record(dim, entities, true, splitWall + (System.nanoTime() - applyStart), items.size());
         if (entities) LAST_REGIONS.put(dim, plan.regions);
+        TICK_REGIONS.merge(dim, plan.regions, Math::max);
         LAST.merge(dim, describe(what, plan.regions, plan.jobs.length, items.size()), RegionTicker::mergeDescription);
         Throwable error = split.error;
         if (error != null) {
@@ -362,6 +375,7 @@ public final class RegionTicker {
         void work(RegionThread self) {
             long started = System.nanoTime();
             long lockWaitBefore = self.lockWaitNanos;
+            WorldPause.leaveSafe(self);
             try {
                 int j;
                 while ((j = this.nextJob.getAndIncrement()) < this.plan.jobs.length) {
@@ -373,13 +387,22 @@ public final class RegionTicker {
                             if (this.error != null) {
                                 break;
                             }
-                            this.rw.readLock().lock();
+                            // Blocked here only by another region thread's exclusive stretch or the dimension thread's chunk
+                            // tasks: this thread is between two items, so it counts as stopped for a world pause.
+                            WorldPause.enterSafe(self);
+                            try {
+                                this.rw.readLock().lock();
+                            } finally {
+                                WorldPause.leaveSafe(self);
+                            }
                             try {
                                 this.action.accept(this.items.get(index));
                             } catch (Throwable t) {
                                 this.fail(t);
                             } finally {
                                 this.rw.readLock().unlock();
+                                self.itemDepth = 0;
+                                WorldPause.end(self);
                                 this.endExclusive(self);
                             }
                         }
@@ -392,6 +415,7 @@ public final class RegionTicker {
             } catch (Throwable t) {
                 this.fail(t);
             } finally {
+                WorldPause.enterSafe(self);
                 this.busyNanos.add(Math.max(0L, System.nanoTime() - started - (self.lockWaitNanos - lockWaitBefore)));
                 if (this.running.decrementAndGet() == 0) {
                     LockSupport.unpark(this.coordinator);
@@ -410,12 +434,42 @@ public final class RegionTicker {
          * every region thread paused) and keeps the other dimensions of this thread served.
          */
         void coordinate() {
+            // The dimension thread only waits and runs chunk tasks here: it counts as stopped for a world pause.
+            WorldPause.enterSafe(this.coordinator);
+            try {
+                this.coordinateLoop();
+            } finally {
+                WorldPause.leaveSafe(this.coordinator);
+            }
+        }
+
+        private void coordinateLoop() {
             long warnAt = System.nanoTime() + SLOW_SPLIT_NANOS;
             boolean warned = false;
             while (this.running.get() > 0) {
                 if (!warned && System.nanoTime() > warnAt) {
                     warned = true;
                     this.reportSlow();
+                }
+                if (WorldPause.heldByOther(this.coordinator)) {
+                    // A thread elsewhere holds the world pause (and the mod lock) and may need chunks of this dimension;
+                    // this dimension's region threads are stopped and hold no read lock.
+                    boolean worked = false;
+                    if (this.rw.writeLock().tryLock()) {
+                        try {
+                            int budget = 256;
+                            while (budget-- > 0 && this.level.getChunkSource().pollTask()) {
+                                worked = true;
+                            }
+                        } catch (Throwable t) {
+                            MultiCore.LOGGER.error("[MultiCore] Error running a chunk task of {} during a world pause", this.level.dimension().location(), t);
+                        } finally {
+                            this.rw.writeLock().unlock();
+                        }
+                    }
+                    worked |= this.coordinator.pollOtherLevels(this.level);
+                    if (!worked) LockSupport.parkNanos(this, 50_000L);
+                    continue;
                 }
                 if (this.chunkWaiters.get() > 0) {
                     // Lock order: the mod lock first, then the write lock (see crossRegion).

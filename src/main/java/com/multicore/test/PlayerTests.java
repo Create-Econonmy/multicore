@@ -122,6 +122,53 @@ public final class PlayerTests {
         return player;
     }
 
+    /**
+     * A player with a connection ticked the way a real one is (in the server's connection list): its player tick
+     * (doTick, from the connection tick) must run on the overworld's own thread, not the main thread, and a packet it
+     * sends from a network thread (selecting hotbar slot 5) must be handled there too (see PlayerThreads).
+     */
+    @GameTest(template = "empty", batch = "players_threads", timeoutTicks = 300)
+    public static void playerTickAndPacketsRunOnTheDimensionThread(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos at = new BlockPos(helper.absolutePos(BlockPos.ZERO).getX() + 6000, 120, helper.absolutePos(BlockPos.ZERO).getZ() - 6000);
+        ServerPlayer player = join(level, "mcrtnet", at);
+        ONLINE.remove(player); // its connection ticks it now, not the test listener
+        Connection connection = player.connection.getConnection();
+        java.util.List<Connection> connections = ((com.multicore.mixin.test.ServerConnectionListenerAccessor) level.getServer().getConnection())
+                .multicore$connections();
+        connections.add(connection);
+        Map<String, Integer> tickThreads = new ConcurrentHashMap<>();
+        Object listener = new Object() {
+            @net.neoforged.bus.api.SubscribeEvent
+            public void tick(net.neoforged.neoforge.event.tick.PlayerTickEvent.Pre e) {
+                if (e.getEntity() == player) tickThreads.merge(Thread.currentThread().getName(), 1, Integer::sum);
+            }
+        };
+        NeoForge.EVENT_BUS.register(listener);
+        long packetsBefore = com.multicore.core.Stats.PLAYER_PACKETS_MOVED.sum();
+        helper.runAfterDelay(20, () -> {
+            Thread netty = new Thread(() -> {
+                try {
+                    new net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket(5).handle(player.connection);
+                } catch (net.minecraft.server.RunningOnDifferentThreadException expected) {
+                    // queued for the player's dimension, as from a real network thread
+                }
+            }, "multicore-test-network");
+            netty.start();
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(player.getInventory().selected == 5, "the hotbar packet was not handled (slot " + player.getInventory().selected + ")");
+            helper.assertTrue(com.multicore.core.Stats.PLAYER_PACKETS_MOVED.sum() > packetsBefore, "the packet was not handled on the dimension thread");
+            int onLevelThreads = tickThreads.entrySet().stream().filter(e -> e.getKey().startsWith("MultiCore")).mapToInt(Map.Entry::getValue).sum();
+            int onMain = tickThreads.getOrDefault("Server thread", 0);
+            helper.assertTrue(onLevelThreads >= 40, "player ticks on dimension threads: " + tickThreads);
+            helper.assertTrue(onMain <= 2, "player ticked on the main thread: " + tickThreads);
+            NeoForge.EVENT_BUS.unregister(listener);
+            connections.remove(connection);
+            leave(player);
+        });
+    }
+
     private static void leave(ServerPlayer player) {
         ONLINE.remove(player);
         SPOT.remove(player.getUUID());

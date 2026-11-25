@@ -30,6 +30,10 @@ public final class MultiCoreConfig {
     public static final ModConfigSpec.DoubleValue AUTO_MIN_SPEEDUP;
     public static final ModConfigSpec.IntValue AUTO_RETRY_MINUTES;
     public static final ModConfigSpec.BooleanValue REGIONS_ENABLED;
+    public static final ModConfigSpec.BooleanValue REGION_AUTO_SCALE;
+    public static final ModConfigSpec.DoubleValue REGION_TARGET_MS;
+    public static final ModConfigSpec.DoubleValue REGION_RELAX_MS;
+    public static final ModConfigSpec.IntValue REGION_MIN_SIZE_CHUNKS;
     public static final ModConfigSpec.IntValue REGION_SIZE_CHUNKS;
     public static final ModConfigSpec.IntValue REGION_THREADS;
     public static final ModConfigSpec.IntValue REGION_MIN_ENTITIES;
@@ -95,8 +99,10 @@ public final class MultiCoreConfig {
                         "An idle dimension always gets its own thread back when a player enters or its tick costs more than busyMs.",
                         "/multicore status shows what it decided and why.")
                 .define("enabled", true);
-        AUTO_IDLE_MS = b.comment("A dimension without players whose tick costs less than this (ms) is idle.")
-                .defineInRange("idleMs", 0.5, 0.0, 50.0);
+        AUTO_IDLE_MS = b.comment("Under load, a dimension without players whose tick costs less than this (ms) ticks on the main thread.",
+                        "0 (the default) = never: light dimensions share a dimension thread instead (see threadGroups), so no",
+                        "game work is left on the main thread.")
+                .defineInRange("idleMs", 0.0, 0.0, 50.0);
         AUTO_BUSY_MS = b.comment("An idle dimension whose tick costs more than this (ms) gets its own thread back.")
                 .defineInRange("busyMs", 2.0, 0.0, 50.0);
         AUTO_LOAD_MS = b.comment("The server counts as overloaded when its average tick takes longer than this (ms).",
@@ -124,17 +130,19 @@ public final class MultiCoreConfig {
                         "Only add a mod after checking it keeps no shared state between dimensions.")
                 .defineListAllowEmpty("threadSafeMods", List.of("minecraft", "neoforge", "multicore"), () -> "", o -> o instanceof String);
         UNLOCK_ALL_MODS = b.comment(
-                        "Treat every mod as thread-safe: the machines (block entities, entities, blocks) AND the event listeners of all",
-                        "mods run in parallel on dimension threads and region threads, without the mod lock. Content in lockedContent",
-                        "still holds the lock, and the locks MultiCore adds for mods that need them (Sable's physics engine, KubeJS,",
-                        "Create's shared managers, per-thread flags) stay in place. Fastest, but any mod that keeps global state without",
-                        "knowing about threads can corrupt it; not tested with the whole pack. Switch it off again if anything odd shows up.",
-                        "Add a mod's content to lockedContent (\"modid:*\") to keep just that mod under the lock.")
-                .define("unlockAllMods", false);
+                        "Treat every mod as thread-safe (the default): the machines (block entities, entities, blocks) AND the event",
+                        "listeners of all mods run in parallel on dimension threads and region threads, without the mod lock.",
+                        "What MultiCore knows to be shared stays guarded: content in lockedContent and listeners in lockedListeners",
+                        "hold the lock; the classes it patches (Create's stress, link and track networks, Supplementaries' hourglass",
+                        "times, FallingTree's caches, Sable's physics engine, KubeJS, per-thread flags) are made safe; and code that",
+                        "reaches into another dimension (a block entity there, Create's logistics) stops every other tick thread for",
+                        "the rest of that block entity or entity tick (a world pause). false = every mod but vanilla and NeoForge on",
+                        "the mod lock, as before 0.4.0.")
+                .define("unlockAllMods", true);
         LOCKED_LISTENERS = b.comment(
                         "Event listeners (\"modid:EventName\", or \"modid:*\" for all of a mod's) that always hold the mod lock, even with",
-                        "unlockAllMods. Found by running the whole pack unlocked: these keep unsynchronized caches.")
-                .defineListAllowEmpty("lockedListeners", List.of("fallingtree:*"), () -> "", o -> o instanceof String);
+                        "unlockAllMods. Add one here if a mod's listener turns out to keep unsynchronized state.")
+                .defineListAllowEmpty("lockedListeners", List.of(), () -> "", o -> o instanceof String);
         THREAD_SAFE_CONTENT = b.comment(
                         "Mod ids whose block entities, entities and blocks may run on several dimension threads at once, while the",
                         "mod's event listeners still hold the mod lock (unless listed in threadSafeListeners). Content listed in",
@@ -154,7 +162,7 @@ public final class MultiCoreConfig {
                         "create:packager", "create:repackager", "create:package_frogport", "create:package_postbox",
                         "create:packager_link", "create:stock_ticker", "create:redstone_requester", "create:factory_panel",
                         "create:table_cloth", "create:display_link", "create:toolbox",
-                        "railways:*", "supplementaries:hourglass"
+                        "railways:*"
                 ), () -> "", o -> o instanceof String);
         THREAD_SAFE_LISTENERS = b.comment(
                         "Single event listeners that may run on several dimension threads at once, as \"modid:EventName\"",
@@ -188,8 +196,20 @@ public final class MultiCoreConfig {
                 .define("enabled", true);
         REGION_SIZE_CHUNKS = b.comment("Size of a square in chunks (rounded down to 2, 4, 8, 16, 32...). Regions are one square apart at least.")
                 .defineInRange("regionSizeChunks", 8, 2, 64);
-        REGION_THREADS = b.comment("At most this many region threads per dimension (0 = the CPU's logical cores minus 2, between 2 and 8).")
-                .defineInRange("threadsPerDimension", 0, 0, 64);
+        REGION_THREADS = b.comment("At most this many region threads per world (0 = every logical core).")
+                .defineInRange("threadsPerDimension", 0, 0, 256);
+        REGION_AUTO_SCALE = b.comment(
+                        "Give each world as many region threads as it needs to keep up with 20 TPS: every 5 seconds a world whose",
+                        "tick takes longer than targetTickMs gets more threads (up to threadsPerDimension); if every region already",
+                        "has its own thread its squares are made smaller (down to minRegionSizeChunks) so more regions appear. A world",
+                        "under relaxTickMs gives threads back, then goes back to regionSizeChunks. false = always threadsPerDimension.")
+                .define("autoScale", true);
+        REGION_TARGET_MS = b.comment("A world whose tick takes longer than this (ms) gets more region threads.")
+                .defineInRange("targetTickMs", 40.0, 1.0, 1000.0);
+        REGION_RELAX_MS = b.comment("A world whose tick takes less than this (ms) gives a region thread back.")
+                .defineInRange("relaxTickMs", 15.0, 0.0, 1000.0);
+        REGION_MIN_SIZE_CHUNKS = b.comment("autoScale never makes squares smaller than this (chunks; 2, 4, 8...).")
+                .defineInRange("minRegionSizeChunks", 4, 2, 64);
         REGION_MIN_ENTITIES = b.comment("Only split a dimension's entities when it has at least this many ticking.")
                 .defineInRange("minEntities", 32, 0, 1_000_000);
         REGION_MIN_BLOCK_ENTITIES = b.comment("Only split a dimension's block entities when it has at least this many ticking.")
