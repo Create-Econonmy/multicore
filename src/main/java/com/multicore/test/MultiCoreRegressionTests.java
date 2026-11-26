@@ -59,16 +59,24 @@ public final class MultiCoreRegressionTests {
         return helper.getLevel().getServer().getLevel(Level.NETHER);
     }
 
-    /** For {@link #classInitializerWaitingForTheModLockDoesNotDeadlock}: a class whose static setup takes the mod lock. */
-    static final class ClinitProbe {
+    /**
+     * Latches for the class-init test, in their own class: the holder thread must be able to touch them while
+     * {@link ClinitProbe} is still being initialized (touching ClinitProbe's own statics would block the holder on the
+     * class before it takes the lock, and the cycle would never form).
+     */
+    static final class ClinitLatches {
         static final java.util.concurrent.CountDownLatch INIT_STARTED = new java.util.concurrent.CountDownLatch(1);
         static final java.util.concurrent.CountDownLatch LOCK_TAKEN = new java.util.concurrent.CountDownLatch(1);
+    }
+
+    /** For {@link #classInitializerWaitingForTheModLockDoesNotDeadlock}: a class whose static setup takes the mod lock. */
+    static final class ClinitProbe {
         static final int VALUE;
 
         static {
-            INIT_STARTED.countDown();
+            ClinitLatches.INIT_STARTED.countDown();
             try {
-                LOCK_TAKEN.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                ClinitLatches.LOCK_TAKEN.await(5, java.util.concurrent.TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -80,6 +88,14 @@ public final class MultiCoreRegressionTests {
         static int value() {
             return VALUE;
         }
+    }
+
+    /** A thread's state and its top frames, for a failure message. */
+    private static String describe(Thread t) {
+        StringBuilder sb = new StringBuilder(t.getName()).append(' ').append(t.getState());
+        StackTraceElement[] st = t.getStackTrace();
+        for (int i = 0; i < Math.min(st.length, 8); i++) sb.append(" <- ").append(st[i].getClassName().replaceAll(".*\\.", "")).append('.').append(st[i].getMethodName()).append(':').append(st[i].getLineNumber());
+        return sb.toString();
     }
 
     /**
@@ -98,9 +114,9 @@ public final class MultiCoreRegressionTests {
         }, "MultiCore test clinit");
         Thread holder = new Thread(() -> {
             try {
-                ClinitProbe.INIT_STARTED.await();
+                ClinitLatches.INIT_STARTED.await();
                 com.multicore.core.ModLock.runLocked(com.multicore.core.LockSource.of("test holder"), () -> {
-                    ClinitProbe.LOCK_TAKEN.countDown();
+                    ClinitLatches.LOCK_TAKEN.countDown();
                     int v = ClinitProbe.value(); // waits for the initializer, while holding the lock
                     result.compareAndSet(null, v == 42 ? "ok" : "wrong value " + v);
                 });
@@ -113,7 +129,8 @@ public final class MultiCoreRegressionTests {
         initializer.start();
         holder.start();
         helper.succeedWhen(() -> {
-            helper.assertTrue(result.get() != null, "still deadlocked: class initializer and mod lock holder wait for each other");
+            helper.assertTrue(result.get() != null, "still deadlocked: class initializer and mod lock holder wait for each other. "
+                    + describe(initializer) + " / " + describe(holder));
             helper.assertTrue("ok".equals(result.get()), result.get());
             helper.assertFalse(com.multicore.core.ModLock.heldByCurrentThread(), "lock leaked");
         });

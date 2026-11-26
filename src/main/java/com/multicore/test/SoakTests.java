@@ -177,6 +177,10 @@ public final class SoakTests {
         }
         AtomicInteger moves = new AtomicInteger();
         AtomicBoolean stop = new AtomicBoolean();
+        // A lost or made-up item means a pause was skipped: say whether a safety valve let one go (soak 2026-11-26).
+        long pauseTimeoutsAtStart = com.multicore.core.Stats.WORLD_PAUSE_TIMEOUTS.sum();
+        long regionTimeoutsAtStart = com.multicore.core.Stats.REGION_EXCLUSIVE_TIMEOUTS.sum();
+        long giveUpsAtStart = com.multicore.core.Stats.MOD_LOCK_GIVE_UPS.sum();
         Map<UUID, Consumer<Entity>> actions = new ConcurrentHashMap<>();
         // On group 0's thread: A -> B (another region). On group 2's thread: B -> nether (another dimension).
         // On the nether's thread: nether -> A (another dimension).
@@ -287,7 +291,10 @@ public final class SoakTests {
             if (over.getBlockEntity(a) instanceof Container ca) total += count(ca); else problems.add("chest A is gone");
             if (over.getBlockEntity(b) instanceof Container cb) total += count(cb); else problems.add("chest B is gone");
             if (nether.getBlockEntity(c) instanceof Container cc) total += count(cc); else problems.add("the nether chest is gone");
-            if (total != ITEMS) problems.add("items lost or made up: " + total + " instead of " + ITEMS + " after " + moves.get() + " moves");
+            if (total != ITEMS) problems.add("items lost or made up: " + total + " instead of " + ITEMS + " after " + moves.get() + " moves"
+                    + " (during the round: " + (com.multicore.core.Stats.WORLD_PAUSE_TIMEOUTS.sum() - pauseTimeoutsAtStart) + " world pause timeouts, "
+                    + (com.multicore.core.Stats.REGION_EXCLUSIVE_TIMEOUTS.sum() - regionTimeoutsAtStart) + " cross-region pause timeouts, "
+                    + (com.multicore.core.Stats.MOD_LOCK_GIVE_UPS.sum() - giveUpsAtStart) + " mod lock give-ups)");
             if (moves.get() <= 300) problems.add("only " + moves.get() + " items moved");
             int onTickThreads = actionThreads.entrySet().stream().filter(e -> e.getKey().startsWith("MultiCore")).mapToInt(Map.Entry::getValue).sum();
             if (onTickThreads <= 1000) problems.add("the item circle did not run on tick threads: " + actionThreads);
