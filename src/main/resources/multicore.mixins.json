@@ -6,6 +6,8 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "compat.cmpackagecouriers.CourierTargetMixin",
+    "compat.createaddition.EnergyNetworkManagerMixin",
+    "compat.createew.EnergyCompatFieldsMixin",
     "compat.create.BeltHelperMixin",
     "compat.create.BrassTunnelStaticsCarrier",
     "compat.create.DeployerCaptureCarrier",

@@ -40,7 +40,10 @@ public final class ThreadGroupTests {
 
     @GameTest(template = "empty", batch = "threadgroups_shared", timeoutTicks = 200)
     public static void overworldNetherAndEndShareOneThreadAndAllTick(GameTestHelper helper) {
-        ParallelTicker.get().configureGroups(new ThreadGroups.Settings(0, 6, 1000.0), List.of());
+        // Pinned: with the live server's Multiworld worlds there are 9 dimensions, more than 6 fit on one thread, so the
+        // automatic grouping alone may put the nether elsewhere (found 2026-11-26).
+        ParallelTicker.get().configureGroups(new ThreadGroups.Settings(0, 6, 1000.0),
+                List.of("minecraft:overworld, minecraft:the_nether, minecraft:the_end"));
         restoreLater(helper, 200);
         ServerLevel overworld = helper.getLevel();
         ServerLevel nether = overworld.getServer().getLevel(Level.NETHER);

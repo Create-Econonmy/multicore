@@ -169,9 +169,19 @@ public final class WorldPause {
             try {
                 long start = System.nanoTime();
                 boolean warned = false;
+                boolean checkedInit = false;
                 while (heldByOther(t)) {
                     if (!t.pollOwnTasks()) {
                         LockSupport.parkNanos(t, 50_000L);
+                    }
+                    if (!checkedInit && System.nanoTime() - start > 100_000_000L) {
+                        checkedInit = true;
+                        // Inside a class initializer the holder may be waiting for this very class (see
+                        // ModLock.insideClassInit): stopping here could never end. Go on, as for the mod lock.
+                        if (ModLock.insideClassInit()) {
+                            Stats.WORLD_PAUSE_TIMEOUTS.increment();
+                            return;
+                        }
                     }
                     if (!warned && System.nanoTime() - start > 10_000_000_000L) {
                         warned = true;

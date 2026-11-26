@@ -13,11 +13,14 @@ import org.spongepowered.asm.mixin.Pseudo;
 @Pseudo
 @Mixin(targets = {
         "biomesoplenty.neoforge.datagen.BOPBlockFamilies",
+        "com.Pink_Cats.createschematicchecker.database.SingleLog",
+        "com.Pink_Cats.createschematicchecker.lang.CSCLanguage",
         "com.adonis.fluid.content.pipette.FluidInteractionPointTypes",
         "com.adonis.fluid.content.tap.TapVirtualRelayManager",
         "com.anton.shieldgenerators.SableSupport",
         "com.anton.shieldgenerators.ShieldClientTracker",
         "com.anton.shieldgenerators.ShieldRegistry",
+        "com.argos_garcia.elitex.gun.AimingDuringReloadControl",
         "com.blackgear.platform.common.data.neoforge.LootModifierImpl",
         "com.blackgear.platform.common.neoforge.CreativeTabsImpl",
         "com.blackgear.platform.common.worldgen.modifier.BiomeManager",
@@ -39,19 +42,16 @@ import org.spongepowered.asm.mixin.Pseudo;
         "com.cake.struts.internal.util.ChunkedMap$ChunkedMapEvents",
         "com.cake.struts.internal.util.LevelSafeStorage",
         "com.cake.trading_floor.registry.TFTriggers",
-        "com.copycatsplus.copycats.utility.ChatUtils",
-        "com.corosus.watut.FakePlayerHelper",
-        "com.createeconomy.fixes.guard.ItemScan",
-        "com.dowar.mods.create_mixed_casing.registry.MixedPartialModels",
-        "com.dudko.blazinghot.data.advancement.BlazingTriggers",
-        "com.dudko.blazinghot.util.WorldUtil",
-        "com.forsteri.createendertransmission.blocks.MatterWorldSavedData",
-        "com.github.alexthe666.alexsmobs.entity.util.RockyChestplateUtil",
-        "com.github.alexthe666.alexsmobs.world.AMWorldData",
-        "com.github.alexthe666.citadel.server.entity.pathfinding.raycoms.AdvancedPathNavigate",
-        "com.github.alexthe666.citadel.server.entity.pathfinding.raycoms.pathjobs.AbstractPathJob",
-        "com.github.alexthe666.citadel.server.world.CitadelServerData",
-        "com.github.alexthe666.citadel.server.world.ExpandedBiomes"
+        "com.cbc_more_content.block.DropBombBlock",
+        "com.cbc_more_content.block.LandMineBlock",
+        "com.cbc_more_content.effects.BombBurstBudget",
+        "com.cbc_more_content.effects.BombSympatheticDetonation",
+        "com.cbc_more_content.event.TripwireSignal",
+        "com.cbc_more_content.radar.InterceptSettingsStore",
+        "com.cbc_more_content.settings.WarnauticsServerSettings",
+        "com.cooptest.AnimationTickHandler",
+        "com.cooptest.ArmPoseTracker",
+        "com.cooptest.CarryingSlowdown"
 }, remap = false)
 public abstract class StaticGuardCarrier00 {
 }

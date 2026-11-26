@@ -44,6 +44,27 @@ public final class ModLock {
     private static final long MONITOR_CHECK_NANOS = 100_000_000L;
     private static final java.util.concurrent.atomic.AtomicBoolean GAVE_UP_LOGGED = new java.util.concurrent.atomic.AtomicBoolean();
 
+    /**
+     * Is the current thread running a class's static initializer? Java holds that class's initialization lock until it
+     * finishes, and any other thread that touches the class waits for it with no timeout, holding whatever it holds.
+     * Not a monitor, so {@link #holdsMonitor} cannot see it. Slow: only after a long wait.
+     * <p>
+     * Found on the live server 2026-11-26: Create's CapabilityMinecartController.&lt;clinit&gt; on the overworld thread
+     * made a WorldAttached (static guard: waits for the mod lock) while the north thread held the mod lock in a level
+     * tick listener that called CapabilityMinecartController.tick, which waits for the class. Neither could move.
+     */
+    static boolean insideClassInit() {
+        return StackWalker.getInstance().walk(s -> s.anyMatch(f -> "<clinit>".equals(f.getMethodName())));
+    }
+
+    /**
+     * Holds this thread skipped inside a class initializer (see {@link #acquire}): {@link #release} uses one up instead
+     * of unlocking. Skipped holds always come before real ones on a thread (a thread holding the lock never waits for it),
+     * so releases in reverse order meet the real holds first.
+     */
+    private static final ThreadLocal<int[]> SKIPPED = ThreadLocal.withInitial(() -> new int[1]);
+    private static final java.util.concurrent.atomic.AtomicBoolean CLINIT_LOGGED = new java.util.concurrent.atomic.AtomicBoolean();
+
     /** Does the current thread hold a Java monitor (a mod's synchronized block)? Slow: only after a long wait. */
     private static boolean holdsMonitor() {
         java.lang.management.ThreadInfo[] info = java.lang.management.ManagementFactory.getThreadMXBean()
@@ -87,9 +108,24 @@ public final class ModLock {
                         if (self != null) {
                             self.pollOwnTasks();
                         }
-                        if (mayGiveUp && !checkedMonitors && System.nanoTime() - start > MONITOR_CHECK_NANOS) {
+                        if (!checkedMonitors && System.nanoTime() - start > MONITOR_CHECK_NANOS) {
                             checkedMonitors = true;
-                            if (holdsMonitor()) {
+                            if (insideClassInit()) {
+                                // The holder may be waiting for the class this thread is initializing. A class initializer
+                                // runs once and nobody else can use the class until it is done, so going on without the
+                                // lock here is what a single server thread would have done anyway.
+                                Stats.MOD_LOCK_GIVE_UPS.increment();
+                                if (CLINIT_LOGGED.compareAndSet(false, true)) {
+                                    Thread owner = LOCK.holder();
+                                    MultiCore.LOGGER.warn("[MultiCore] {} waited 100 ms for the mod lock ({}) inside a class initializer while {} "
+                                            + "holds it; going on without it to avoid a deadlock (shown once).",
+                                            Thread.currentThread().getName(), source, owner == null ? "nobody" : owner.getName(),
+                                            new Throwable("where it happened"));
+                                }
+                                SKIPPED.get()[0]++;
+                                return true;
+                            }
+                            if (mayGiveUp && holdsMonitor()) {
                                 Stats.MOD_LOCK_GIVE_UPS.increment();
                                 if (GAVE_UP_LOGGED.compareAndSet(false, true)) {
                                     Thread owner = LOCK.holder();
@@ -145,6 +181,13 @@ public final class ModLock {
     }
 
     public static void release() {
+        if (!LOCK.isHeldByCurrentThread()) {
+            int[] skipped = SKIPPED.get();
+            if (skipped[0] > 0) {
+                skipped[0]--;
+                return;
+            }
+        }
         if (LOCK.getHoldCount() == 1 && holder != null) {
             holder.holdNanos.add(System.nanoTime() - holdStart);
             holder = null;

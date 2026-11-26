@@ -23,7 +23,8 @@
     "guard.StaticGuardCarrier15",
     "guard.StaticGuardCarrier16",
     "guard.StaticGuardCarrier17",
-    "guard.StaticGuardCarrier18"
+    "guard.StaticGuardCarrier18",
+    "guard.StaticGuardCarrier19"
   ],
   "injectors": {
     "defaultRequire": 0

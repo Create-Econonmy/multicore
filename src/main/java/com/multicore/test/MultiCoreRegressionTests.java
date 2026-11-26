@@ -59,6 +59,66 @@ public final class MultiCoreRegressionTests {
         return helper.getLevel().getServer().getLevel(Level.NETHER);
     }
 
+    /** For {@link #classInitializerWaitingForTheModLockDoesNotDeadlock}: a class whose static setup takes the mod lock. */
+    static final class ClinitProbe {
+        static final java.util.concurrent.CountDownLatch INIT_STARTED = new java.util.concurrent.CountDownLatch(1);
+        static final java.util.concurrent.CountDownLatch LOCK_TAKEN = new java.util.concurrent.CountDownLatch(1);
+        static final int VALUE;
+
+        static {
+            INIT_STARTED.countDown();
+            try {
+                LOCK_TAKEN.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            // Like Create's CapabilityMinecartController.<clinit> making a guarded WorldAttached.
+            com.multicore.core.ModLock.runLocked(com.multicore.core.LockSource.of("test clinit"), () -> { });
+            VALUE = 42;
+        }
+
+        static int value() {
+            return VALUE;
+        }
+    }
+
+    /**
+     * Live server freeze 2026-11-26: one thread inside a class initializer waits for the mod lock, the holder waits for
+     * that class. Java's class-init wait has no timeout, so this hung the server on its first tick.
+     */
+    @GameTest(template = EMPTY, timeoutTicks = 200)
+    public static void classInitializerWaitingForTheModLockDoesNotDeadlock(GameTestHelper helper) {
+        AtomicReference<String> result = new AtomicReference<>();
+        Thread initializer = new Thread(() -> {
+            try {
+                Class.forName(ClinitProbe.class.getName(), true, ClinitProbe.class.getClassLoader());
+            } catch (Throwable t) {
+                result.compareAndSet(null, "initializer failed: " + t);
+            }
+        }, "MultiCore test clinit");
+        Thread holder = new Thread(() -> {
+            try {
+                ClinitProbe.INIT_STARTED.await();
+                com.multicore.core.ModLock.runLocked(com.multicore.core.LockSource.of("test holder"), () -> {
+                    ClinitProbe.LOCK_TAKEN.countDown();
+                    int v = ClinitProbe.value(); // waits for the initializer, while holding the lock
+                    result.compareAndSet(null, v == 42 ? "ok" : "wrong value " + v);
+                });
+            } catch (Throwable t) {
+                result.compareAndSet(null, "holder failed: " + t);
+            }
+        }, "MultiCore test holder");
+        initializer.setDaemon(true);
+        holder.setDaemon(true);
+        initializer.start();
+        holder.start();
+        helper.succeedWhen(() -> {
+            helper.assertTrue(result.get() != null, "still deadlocked: class initializer and mod lock holder wait for each other");
+            helper.assertTrue("ok".equals(result.get()), result.get());
+            helper.assertFalse(com.multicore.core.ModLock.heldByCurrentThread(), "lock leaked");
+        });
+    }
+
     /** Bug #14: mods (Open Parties and Claims, Lootr, Polymorph) switch off unless isSameThread() is true. */
     @GameTest(template = EMPTY, timeoutTicks = 100)
     public static void levelThreadCountsAsServerThread(GameTestHelper helper) {
