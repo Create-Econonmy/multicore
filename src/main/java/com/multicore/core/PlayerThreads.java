@@ -128,13 +128,13 @@ public final class PlayerThreads {
         }
     }
 
-    /** A disconnect handled on a dimension thread removes the player from the player list: main thread instead. */
+    /**
+     * A disconnect handled on a dimension thread removes the player from the player list: not here. The main thread's
+     * ServerConnectionListener.tick handles every closed connection itself at its next tick (queueing it as well made
+     * vanilla log "handleDisconnection() called twice", found by the soak test 2026-11-26).
+     */
     public static boolean deferDisconnect(Connection connection) {
-        if (Thread.currentThread() instanceof LevelThread && TickThreads.inParallelPhase()) {
-            SerialQueue.defer("player disconnect", connection::handleDisconnection);
-            return true;
-        }
-        return false;
+        return Thread.currentThread() instanceof LevelThread && TickThreads.inParallelPhase();
     }
 
     // ---- packets ----

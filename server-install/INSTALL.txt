@@ -175,4 +175,4 @@ TEST NOTES (2026-11-15, local test server only)
     (NoClassDefFoundError dan200/computercraft/...), MultiCore on or off.
     Electronic Warfare was left out of the test.
 
-jar sha256 (multicore-0.4.0.jar): ef0021ef7f00eec3e498dd8d6a5d38c3ec3eb81fba1bc8ba8642036af839c13f
+jar sha256 (multicore-0.4.0.jar): eba909d2f51518ede55f2dda0da371964b66e3f66228b4763d555e83968483c9

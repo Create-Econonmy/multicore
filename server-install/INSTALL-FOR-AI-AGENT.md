@@ -57,7 +57,7 @@ every **CHECKPOINT** to report to the owner and wait for their go-ahead.
 ## 4. Before installing (read-only, then CHECKPOINT)
 
 1. **Find the files to install.** They're in this folder (`server-install/` of the MultiCore project on the owner's PC):
-   - `mods/multicore-0.4.0.jar`: the mod. Its SHA-256 must be `ef0021ef7f00eec3e498dd8d6a5d38c3ec3eb81fba1bc8ba8642036af839c13f` (also in `INSTALL.txt`).
+   - `mods/multicore-0.4.0.jar`: the mod. Its SHA-256 must be `eba909d2f51518ede55f2dda0da371964b66e3f66228b4763d555e83968483c9` (also in `INSTALL.txt`).
    - `config/multicore-common.toml`: the default config. Optional; the mod writes it on first start anyway.
 2. **Compare the server's mods with the tested list.** List the server's `mods/` folder and compare it with
    `tools/server-mods-2026-11-15.txt` in the project (the mod list MultiCore was tested with). Report every jar that

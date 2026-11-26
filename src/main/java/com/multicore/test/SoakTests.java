@@ -277,7 +277,7 @@ public final class SoakTests {
                 }
             }
             // A real client answers the keep-alive checks; this one has nobody on the other end.
-            if (t % 100 == 0) answerKeepAlive(player);
+            if (t % 10 == 0) answerKeepAlive(player);
         });
         // The verdict is taken once, 40 ticks after the circle stopped, then everything is cleaned up.
         java.util.concurrent.atomic.AtomicReference<String> verdict = new java.util.concurrent.atomic.AtomicReference<>();

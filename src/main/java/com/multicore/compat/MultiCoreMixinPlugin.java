@@ -104,7 +104,8 @@ public final class MultiCoreMixinPlugin implements IMixinConfigPlugin {
             // own records: the lock is enough. Requests and stock summaries reach inventories: those pause the world.
             int wrapped = MethodLockTransformer.wrapAllMethods(targetClass,
                     "create " + targetClassName.substring(targetClassName.lastIndexOf('.') + 1),
-                    m -> m.name.equals("tick") ? "enterShared" : "enterSharedPausing");
+                    // Hooks other mods' mixins merged into the class (names with '$', e.g. a profiler's) only lock too.
+                    m -> m.name.equals("tick") || m.name.contains("$") ? "enterShared" : "enterSharedPausing");
             MultiCore.LOGGER.info("[MultiCore] {}: {} methods take the mod lock and pause every other tick thread", targetClassName, wrapped);
         } else if (mixinClassName.endsWith(".create.BrassTunnelStaticsCarrier")) {
             int rewritten = ThreadLocalStaticsTransformer.rewrite(targetClass, ThreadStatics.CREATE_BRASS_TUNNEL, CREATE_BRASS_TUNNEL_FIELDS);

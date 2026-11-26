@@ -35,6 +35,7 @@
     "core.BlockEntitySaveLoadMixin",
     "core.EntitySaveLoadMixin",
     "core.ChunkMapGuardMixin",
+    "core.ChunkWaitSafePointMixin",
     "core.ChunkSystemGuardMixins",
     "core.EntityMixin",
     "core.EntityTypeMixin",
