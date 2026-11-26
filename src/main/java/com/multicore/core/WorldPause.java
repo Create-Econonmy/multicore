@@ -77,24 +77,37 @@ public final class WorldPause {
             Stats.WORLD_PAUSES_SKIPPED.increment();
             return;
         }
-        ModLock.acquire(SOURCE);
-        // Nobody else holds the pause now: every holder keeps the mod lock until it lets go.
-        holder = self;
-        self.pauseModLock = true;
-        Stats.WORLD_PAUSES.increment();
         long start = System.nanoTime();
-        for (LevelThread other : THREADS) {
-            if (other == self) continue;
-            while (other.safe <= 0 && other.isAlive()) {
-                if (System.nanoTime() - start > WAIT_LIMIT_NANOS) {
-                    timedOut(self, other);
-                    break;
-                }
-                if (!self.pollOwnTasks()) {
-                    LockSupport.parkNanos(20_000L);
+        boolean lost;
+        do {
+            ModLock.acquire(SOURCE);
+            // Nobody else holds the pause now: every holder keeps the mod lock until it lets go.
+            holder = self;
+            self.pauseModLock = true;
+            Stats.WORLD_PAUSES.increment();
+            lost = false;
+            waiting:
+            for (LevelThread other : THREADS) {
+                if (other == self) continue;
+                while (other.safe <= 0 && other.isAlive()) {
+                    if (System.nanoTime() - start > WAIT_LIMIT_NANOS) {
+                        timedOut(self, other);
+                        break;
+                    }
+                    if (!self.pollOwnTasks()) {
+                        LockSupport.parkNanos(20_000L);
+                    }
+                    if (holder != self) {
+                        // One of this thread's own chunk tasks waited (enterSafe / ModLock.suspend), which ends the pause
+                        // and lets go of the mod lock. Another thread may have started its own pause since, and the two
+                        // would wait for each other until both timed out (soak 2026-11-26: the_nether and overworld
+                        // region 3 both inside this loop). Take the pause again from the start.
+                        lost = true;
+                        break waiting;
+                    }
                 }
             }
-        }
+        } while (lost);
         Stats.WORLD_PAUSE_WAIT_NANOS.add(System.nanoTime() - start);
     }
 
