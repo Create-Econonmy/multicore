@@ -27,14 +27,17 @@ every **CHECKPOINT** to report to the owner and wait for their go-ahead.
 - **Region threads (new in 0.3.0):** a busy world is split further. Its entities and block entities are grouped into
   regions at least 128 blocks apart, and each region ticks on its own thread. Players far apart in the same world no
   longer wait for each other.
-- **Mod safety:** code from mods that aren't proven thread-safe (Create, Create Economy's mods, almost everything)
-  holds one shared "mod lock", so it never runs on two threads at once. Vanilla code runs fully in parallel.
-- **What stays on the main thread:** player movement and damage, commands (`/tpa`, `/home`, `/pay`...), block and
-  chest interactions, moving between worlds, and mods' level-tick and server-tick events. These are things that must
-  happen one at a time.
-- **Auto-adjust:** worlds with no players that cost under 0.5 ms tick on the main thread. If the server stays under
-  20 TPS for 30 seconds in a row and threading is not making the tick at least 1.05× faster, MultiCore ticks like
-  vanilla for 10 minutes and then measures again. So it can't stay slower than vanilla.
+- **Every mod unlocked (0.4.0, `unlockAllMods = true`; stages A and B run with it `false`):** all mods' machines and
+  listeners run in parallel. What mods share is made safe instead: a "static guard" generated for this exact mod list
+  locks only the code that uses shared mod state; code reaching into another world (Create logistics, Ender
+  Transmission) briefly pauses the other threads. Create trains and logistics machines still take the lock. With
+  `unlockAllMods = false` every mod except vanilla and NeoForge holds one shared "mod lock", as in 0.3.
+- **What stays on the main thread:** chat and commands (`/tpa`, `/home`, `/pay`...), logins and logouts, saving, moving
+  between worlds, and mods' server-tick events. Player ticks, player movement/mining/clicking packets and level-tick
+  events run on the world's own thread.
+- **Auto-adjust:** a world starts unsplit on a shared thread and gets region threads only while its tick is over 40 ms
+  (`autoScale`), giving them back under 15 ms. If the server stays under 20 TPS for 30 seconds in a row and threading
+  is not making the tick at least 1.05x faster, MultiCore ticks like vanilla for 10 minutes and then measures again.
 - **Safety net:** if a threading error happens anyway, it logs it and switches itself (or just region threads) off for
   the rest of the session instead of crashing.
 - **Lithium:** MultiCore turns off three Lithium options that keep one shared list per world
