@@ -64,6 +64,19 @@ public final class WorldPause {
         return holder;
     }
 
+    /** Set once the holder has seen every other tick thread stopped; cleared when the pause ends. */
+    private static volatile boolean active;
+
+    /**
+     * For tests and diagnostics: the thread holding a pause that is in force (everyone else has stopped), or null. While
+     * the holder still waits for the others, they may finish the item they are in: that is not a leak.
+     */
+    @Nullable
+    public static Thread activeHolder() {
+        LevelThread h = holder;
+        return active && h != null ? h : null;
+    }
+
     /**
      * Pause every other tick thread for the rest of the current item. Does nothing outside the parallel phase (the
      * server thread is alone then) or when this thread already holds the pause.
@@ -114,6 +127,7 @@ public final class WorldPause {
                 }
             }
         } while (lost);
+        active = holder == self;
         Stats.WORLD_PAUSE_WAIT_NANOS.add(System.nanoTime() - start);
     }
 
@@ -130,6 +144,7 @@ public final class WorldPause {
     /** The holder's item is over: let everyone go. */
     static void end(LevelThread self) {
         if (holder != self) return;
+        active = false;
         holder = null;
         for (LevelThread t : THREADS) {
             if (t.safe > 0) LockSupport.unpark(t);

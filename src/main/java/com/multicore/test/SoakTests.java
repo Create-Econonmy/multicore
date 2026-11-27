@@ -201,7 +201,7 @@ public final class SoakTests {
             }
         };
         java.util.function.Consumer<String> paused = where -> {
-            Thread h = com.multicore.core.WorldPause.holderThread();
+            Thread h = com.multicore.core.WorldPause.activeHolder();
             if (h != null && h != Thread.currentThread() && oddities.size() < 20) {
                 oddities.add(where + " on " + Thread.currentThread().getName() + " while " + h.getName() + " held the world pause (tick "
                         + over.getGameTime() + ")");
