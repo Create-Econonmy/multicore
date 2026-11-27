@@ -58,6 +58,12 @@ public final class WorldPause {
         return holder == Thread.currentThread();
     }
 
+    /** For tests and diagnostics: the thread holding the pause, or null. */
+    @Nullable
+    public static Thread holderThread() {
+        return holder;
+    }
+
     /**
      * Pause every other tick thread for the rest of the current item. Does nothing outside the parallel phase (the
      * server thread is alone then) or when this thread already holds the pause.

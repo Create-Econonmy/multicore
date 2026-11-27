@@ -184,21 +184,54 @@ public final class SoakTests {
         Map<UUID, Consumer<Entity>> actions = new ConcurrentHashMap<>();
         // On group 0's thread: A -> B (another region). On group 2's thread: B -> nether (another dimension).
         // On the nether's thread: nether -> A (another dimension).
-        actions.put(groups.get(0).get(0).getUUID(), e -> {
+        // Diagnostics for a rare lost or made-up item (soak 2026-11-26/27, with no pause timeout or give-up): each mover
+        // notes when it runs on two threads at once, and the chests' contents are checked against the moves after each
+        // action (only that mover's own chests, and only while it is alone).
+        AtomicInteger[] inside = {new AtomicInteger(), new AtomicInteger(), new AtomicInteger()};
+        List<String> oddities = java.util.Collections.synchronizedList(new ArrayList<>());
+        AtomicInteger[] moverMoves = {new AtomicInteger(), new AtomicInteger(), new AtomicInteger()};
+        java.util.function.BiConsumer<Integer, Runnable> guarded = (m, body) -> {
+            if (inside[m].incrementAndGet() > 1 && oddities.size() < 20) {
+                oddities.add("mover " + m + " ran on two threads at once (" + Thread.currentThread().getName() + ", tick " + over.getGameTime() + ")");
+            }
+            try {
+                body.run();
+            } finally {
+                inside[m].decrementAndGet();
+            }
+        };
+        java.util.function.Consumer<String> paused = where -> {
+            Thread h = com.multicore.core.WorldPause.holderThread();
+            if (h != null && h != Thread.currentThread() && oddities.size() < 20) {
+                oddities.add(where + " on " + Thread.currentThread().getName() + " while " + h.getName() + " held the world pause (tick "
+                        + over.getGameTime() + ")");
+            }
+        };
+        actions.put(groups.get(0).get(0).getUUID(), e -> guarded.accept(0, () -> {
             if (!stop.get() && over.getBlockEntity(a) instanceof ChestBlockEntity ca && over.getBlockEntity(b) instanceof ChestBlockEntity cb) {
-                for (int k = 0; k < 4; k++) if (moveOne(ca, cb)) moves.incrementAndGet();
+                for (int k = 0; k < 4; k++) {
+                    paused.accept("mover 0 (A->B) moved");
+                    if (moveOne(ca, cb)) { moves.incrementAndGet(); moverMoves[0].incrementAndGet(); }
+                }
+                paused.accept("mover 0 (A->B) finished");
             }
-        });
-        actions.put(groups.get(2).get(0).getUUID(), e -> {
+        }));
+        actions.put(groups.get(2).get(0).getUUID(), e -> guarded.accept(1, () -> {
             if (!stop.get() && over.getBlockEntity(b) instanceof ChestBlockEntity cb && nether.getBlockEntity(c) instanceof ChestBlockEntity cc) {
-                for (int k = 0; k < 4; k++) if (moveOne(cb, cc)) moves.incrementAndGet();
+                for (int k = 0; k < 4; k++) if (moveOne(cb, cc)) { moves.incrementAndGet(); moverMoves[1].incrementAndGet(); }
             }
-        });
-        actions.put(netherGroup.get(0).getUUID(), e -> {
+        }));
+        actions.put(netherGroup.get(0).getUUID(), e -> guarded.accept(2, () -> {
             if (!stop.get() && nether.getBlockEntity(c) instanceof ChestBlockEntity cc && over.getBlockEntity(a) instanceof ChestBlockEntity ca) {
-                for (int k = 0; k < 4; k++) if (moveOne(cc, ca)) moves.incrementAndGet();
+                for (int k = 0; k < 4; k++) {
+                    if (!com.multicore.core.WorldPause.heldByCurrentThread() && oddities.size() < 20) {
+                        oddities.add("mover 2 (nether->A) had no world pause at move " + k + " on " + Thread.currentThread().getName()
+                                + " (holder " + com.multicore.core.WorldPause.holderThread() + ", tick " + over.getGameTime() + ")");
+                    }
+                    if (moveOne(cc, ca)) { moves.incrementAndGet(); moverMoves[2].incrementAndGet(); }
+                }
             }
-        });
+        }));
         Set<UUID> busyIds = ConcurrentHashMap.newKeySet();
         Map<UUID, Integer> groupOf = new ConcurrentHashMap<>();
         for (int g = 0; g < groups.size(); g++) for (Pig p : groups.get(g)) groupOf.put(p.getUUID(), g);
@@ -294,7 +327,14 @@ public final class SoakTests {
             if (total != ITEMS) problems.add("items lost or made up: " + total + " instead of " + ITEMS + " after " + moves.get() + " moves"
                     + " (during the round: " + (com.multicore.core.Stats.WORLD_PAUSE_TIMEOUTS.sum() - pauseTimeoutsAtStart) + " world pause timeouts, "
                     + (com.multicore.core.Stats.REGION_EXCLUSIVE_TIMEOUTS.sum() - regionTimeoutsAtStart) + " cross-region pause timeouts, "
-                    + (com.multicore.core.Stats.MOD_LOCK_GIVE_UPS.sum() - giveUpsAtStart) + " mod lock give-ups)");
+                    + (com.multicore.core.Stats.MOD_LOCK_GIVE_UPS.sum() - giveUpsAtStart) + " mod lock give-ups; moves per mover A->B "
+                    + moverMoves[0].get() + ", B->nether " + moverMoves[1].get() + ", nether->A " + moverMoves[2].get()
+                    + "; chests A/B/nether " + (over.getBlockEntity(a) instanceof Container x1 ? count(x1) : -1) + "/"
+                    + (over.getBlockEntity(b) instanceof Container x2 ? count(x2) : -1) + "/"
+                    + (nether.getBlockEntity(c) instanceof Container x3 ? count(x3) : -1)
+                    + "; " + com.multicore.core.Stats.WORLD_PAUSES_RESUMED.sum() + " resumed pauses so far"
+                    + (oddities.isEmpty() ? "" : "; " + String.join(", ", oddities)) + ")");
+            if (total == ITEMS && !oddities.isEmpty()) problems.add("pause checks failed: " + String.join(", ", oddities));
             if (moves.get() <= 300) problems.add("only " + moves.get() + " items moved");
             int onTickThreads = actionThreads.entrySet().stream().filter(e -> e.getKey().startsWith("MultiCore")).mapToInt(Map.Entry::getValue).sum();
             if (onTickThreads <= 1000) problems.add("the item circle did not run on tick threads: " + actionThreads);

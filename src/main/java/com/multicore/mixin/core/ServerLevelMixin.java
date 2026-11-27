@@ -42,6 +42,23 @@ public abstract class ServerLevelMixin {
         com.multicore.core.PlayerThreads.forget((ServerLevel) (Object) this);
     }
 
+    /**
+     * The whole entity tick is one item for world pauses, NeoForge's EntityTickEvent.Pre/Post included (they run around
+     * Entity.tick, outside the wrapper below). A mod's listener there that reaches into another dimension takes a world
+     * pause; a chunk wait inside it ends the pause, and only inside an item is it taken back afterwards (WorldPause
+     * .resumeIfNeeded). Soak 2026-11-27: the chaos test's nether mover lost its pause after its first move this way, and
+     * an item went missing from a chest two threads were using.
+     */
+    @com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod(method = "tickNonPassenger")
+    private void multicore$entityTickIsOneItem(Entity entity, Operation<Void> original) {
+        WorldPause.beginItem();
+        try {
+            original.call(entity);
+        } finally {
+            WorldPause.endItem();
+        }
+    }
+
     // ---- Entities from unsafe mods tick under the mod lock ----
 
     @WrapOperation(method = "tickNonPassenger", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;tick()V"))
