@@ -102,10 +102,17 @@ public final class MultiCoreMixinPlugin implements IMixinConfigPlugin {
         } else if (mixinClassName.endsWith(".create.LogisticsPauseCarrier")) {
             // The per-tick bookkeeping (now run on every world's thread with the level tick events) only touches Create's
             // own records: the lock is enough. Requests and stock summaries reach inventories: those pause the world.
+            // GlobalLogisticsManager never reaches an inventory (every method only reads or writes its network maps; checked
+            // in Create 6.0.10 bytecode), so it only locks: factory gauges called getUnloadedLinkCount every tick, and each
+            // call stopped every other world thread (spark 2026-11-27: 5-6% of overworld and creative).
+            // LogisticsManager.getSummaryOfNetwork is a cache lookup; only a cache miss (createSummaryOfNetwork, still
+            // pausing) walks the network's inventories.
+            boolean global = targetClassName.endsWith(".GlobalLogisticsManager");
             int wrapped = MethodLockTransformer.wrapAllMethods(targetClass,
                     "create " + targetClassName.substring(targetClassName.lastIndexOf('.') + 1),
                     // Hooks other mods' mixins merged into the class (names with '$', e.g. a profiler's) only lock too.
-                    m -> m.name.equals("tick") || m.name.contains("$") ? "enterShared" : "enterSharedPausing");
+                    m -> global || m.name.equals("tick") || m.name.contains("$") || LOGISTICS_LOCK_ONLY.contains(m.name)
+                            ? "enterShared" : "enterSharedPausing");
             MultiCore.LOGGER.info("[MultiCore] {}: {} methods take the mod lock and pause every other tick thread", targetClassName, wrapped);
         } else if (mixinClassName.endsWith(".create.BrassTunnelStaticsCarrier")) {
             int rewritten = ThreadLocalStaticsTransformer.rewrite(targetClass, ThreadStatics.CREATE_BRASS_TUNNEL, CREATE_BRASS_TUNNEL_FIELDS);
@@ -119,6 +126,8 @@ public final class MultiCoreMixinPlugin implements IMixinConfigPlugin {
     private static final Set<String> ENDER_CHANNELS = Set.of(
             "com/forsteri/createendertransmission/blocks/energyTransmitter/EnergyNetwork.channels",
             "com/forsteri/createendertransmission/blocks/MatterTransmitterNetwork.channels");
+    /** LogisticsManager methods that do not reach inventories themselves (see the LogisticsPauseCarrier branch). */
+    private static final Set<String> LOGISTICS_LOCK_ONLY = Set.of("getSummaryOfNetwork");
     private static final String RAILS_MIXIN_VARIABLES = "com/railwayteam/railways/util/MixinVariables";
     private static final Set<String> RAILS_FIELDS = Set.of("trackEdgeTemporarilyFlipped", "trackEdgeCarriageTravelling",
             "temporarilySkipSwitches", "signalPropagatorCallDepth", "navigationCallDepth", "largeGhastFireballExplosion");

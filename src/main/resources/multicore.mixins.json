@@ -17,6 +17,7 @@
     "compat.createendertransmission.ChannelPauseCarrier",
     "compat.createthreadedtrains.GlobalRailwayManagerMixin",
     "compat.fallingtree.BlockCachesMixin",
+    "compat.fluid.ContactFluidChunkMixin",
     "compat.openpartiesandclaims.ClaimCaptureCarrier",
     "compat.openpartiesandclaims.ClaimCaptureInterfaceCarrier",
     "compat.ponder.WorldAttachedMixin",

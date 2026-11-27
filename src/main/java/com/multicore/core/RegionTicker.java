@@ -206,8 +206,15 @@ public final class RegionTicker {
         int maxJobs = Math.min(threadsPerDimension(), RegionScaler.get().threads(dim));
         int shift = Math.min(RegionTicker.shift, RegionScaler.get().shift(dim));
         boolean bigEnough = items.size() >= min;
-        RegionPlan plan = bigEnough && RegionGovernor.allowSplit(dim, entities) ? RegionPlan.plan(cx, cz, items.size(), shift, maxJobs) : null;
+        boolean allowed = bigEnough && RegionGovernor.allowSplit(dim, entities);
+        RegionPlan plan = allowed ? RegionPlan.plan(cx, cz, items.size(), shift, maxJobs) : null;
         if (plan == null) {
+            // Why this loop ran on one thread, for /multicore status and the status page: a lagging world that never
+            // splits is either one connected area (nothing to do safely) or a world where splitting measured slower.
+            String why = !bigEnough ? "fewer than " + min
+                    : !allowed ? "split measured slower"
+                    : maxJobs < 2 ? "1 thread allowed"
+                    : "one connected area";
             long serialStart = System.nanoTime();
             for (T item : items) {
                 action.accept(item);
@@ -215,7 +222,7 @@ public final class RegionTicker {
             // Only loops that could have been split count as the one-thread baseline.
             if (bigEnough) RegionGovernor.record(dim, entities, false, System.nanoTime() - serialStart, items.size());
             if (entities) LAST_REGIONS.put(dim, 1);
-            LAST.merge(dim, describe(what, 1, 1, items.size()), RegionTicker::mergeDescription);
+            LAST.merge(dim, describe(what, 1, 1, items.size()) + " (" + why + ")", RegionTicker::mergeDescription);
             return;
         }
         LevelThread owner = TickThreads.currentLevelThread();
