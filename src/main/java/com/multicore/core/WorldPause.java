@@ -150,6 +150,7 @@ public final class WorldPause {
         if (Thread.currentThread() instanceof LevelThread t) {
             if (--t.itemDepth <= 0) {
                 t.itemDepth = 0;
+                t.resumePause = false;
                 end(t);
             }
         }
@@ -160,6 +161,7 @@ public final class WorldPause {
      * ends here: whatever it waits for may need the threads it stopped.
      */
     public static void enterSafe(LevelThread t) {
+        noteResume(t);
         end(t);
         t.safe++;
     }
@@ -168,6 +170,27 @@ public final class WorldPause {
     public static void leaveSafe(LevelThread t) {
         t.safe--;
         stopIfPaused(t);
+        resumeIfNeeded(t);
+    }
+
+    /**
+     * A wait inside an item ends this thread's pause (see enterSafe); remember to take it back. Without this the rest of
+     * the item ran with every other thread going again: soak 2026-11-26, the chaos test lost an item with no pause
+     * timeout and no lock give-up (a cross-dimension chest move waiting for a chunk or another thread mid-item).
+     */
+    static void noteResume(LevelThread t) {
+        if (holder == t && t.itemDepth > 0) {
+            t.resumePause = true;
+        }
+    }
+
+    /** After the outermost wait of an item: take back the pause the wait ended. */
+    static void resumeIfNeeded(LevelThread t) {
+        if (t.resumePause && t.safe <= 0 && t.itemDepth > 0) {
+            t.resumePause = false;
+            Stats.WORLD_PAUSES_RESUMED.increment();
+            begin();
+        }
     }
 
     /** A safe point. If another thread holds the pause, stop here until it lets go. */

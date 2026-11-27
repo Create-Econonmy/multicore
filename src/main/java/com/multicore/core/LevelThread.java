@@ -49,6 +49,8 @@ public class LevelThread extends Thread {
     int itemDepth;
     /** This thread took the mod lock for a world pause it holds. */
     boolean pauseModLock;
+    /** This thread held a world pause that a wait inside the same item ended: take it again once the wait is over. */
+    boolean resumePause;
 
     /** For {@link RegionThread}. */
     protected LevelThread(String name, ServerLevel level, ClassLoader contextLoader) {

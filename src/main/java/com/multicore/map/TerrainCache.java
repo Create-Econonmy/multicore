@@ -2,20 +2,16 @@ package com.multicore.map;
 
 import com.multicore.MultiCore;
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -32,7 +28,7 @@ import net.minecraft.world.level.material.MapColor;
  * reads the finished arrays. Kept on disk between restarts so the map is not empty after a reboot.
  */
 final class TerrainCache {
-    private static final int MAGIC = 0x4d434d31; // "MCM1"
+    private static final int MAGIC = TerrainFile.MAGIC;
     /** A loaded chunk is coloured again after this long (players build). */
     private static final long REFRESH_TICKS = 20L * 60 * 5;
 
@@ -227,90 +223,15 @@ final class TerrainCache {
         }
     }
 
-    /** One dimension's chunks, copied for writing: the keys and the (never changed) colour arrays they point to. */
-    private record Snapshot(String dim, long[] keys, byte[][] rgb) {
-    }
+    private final TerrainFile file = new TerrainFile(MultiCore.LOGGER::warn);
 
-    private final Object writeLock = new Object();
-    private final java.util.concurrent.atomic.AtomicBoolean writing = new java.util.concurrent.atomic.AtomicBoolean();
-
-    /**
-     * Copies what is to be saved. Linear in the number of chunks: an earlier version used Map.copyOf, whose immutable
-     * map probes linearly, and chunk keys (Long.hashCode of a packed x/z = x ^ z) collide so much that the copy grew
-     * quadratically: a 58 s stall of the server thread in the soak test of 2026-11-26, worse on a big explored world.
-     */
-    private java.util.List<Snapshot> snapshot() {
-        java.util.List<Snapshot> out = new java.util.ArrayList<>();
-        for (Map.Entry<String, ConcurrentHashMap<Long, Entry>> d : this.chunks.entrySet()) {
-            java.util.ArrayList<Map.Entry<Long, Entry>> list = new java.util.ArrayList<>(d.getValue().size() + 16);
-            list.addAll(d.getValue().entrySet()); // weakly consistent, never throws
-            long[] keys = new long[list.size()];
-            byte[][] rgb = new byte[list.size()][];
-            for (int i = 0; i < keys.length; i++) {
-                keys[i] = list.get(i).getKey();
-                rgb[i] = list.get(i).getValue().rgb;
-            }
-            out.add(new Snapshot(d.getKey(), keys, rgb));
-        }
-        return out;
-    }
-
-    /** Saves now, on this thread (server stopping). Waits for a background save that is still writing. */
+    /** Saves now, on this thread (server stopping). */
     void save(Path dir) {
-        write(dir, snapshot());
+        this.file.save(dir, this.chunks, Entry::rgb);
     }
 
-    /** Saves in the background: the server thread only copies the references (see {@link #snapshot}). */
+    /** Saves in the background: the server thread only copies the references (see {@link TerrainFile}). */
     void saveInBackground(Path dir) {
-        if (!this.writing.compareAndSet(false, true)) return; // the last one is still writing
-        java.util.List<Snapshot> snap;
-        try {
-            snap = snapshot();
-        } catch (RuntimeException e) {
-            this.writing.set(false);
-            throw e;
-        }
-        Thread t = new Thread(() -> {
-            try {
-                write(dir, snap);
-            } finally {
-                this.writing.set(false);
-            }
-        }, "MultiCore map save");
-        t.setDaemon(true);
-        t.setPriority(Thread.MIN_PRIORITY);
-        t.start();
-    }
-
-    private void write(Path dir, java.util.List<Snapshot> snap) {
-        synchronized (this.writeLock) {
-            try {
-                Files.createDirectories(dir);
-            } catch (IOException e) {
-                MultiCore.LOGGER.warn("[MultiCore] map: could not create {}: {}", dir, e.toString());
-                return;
-            }
-            for (Snapshot d : snap) {
-                Path file = dir.resolve(d.dim().replaceAll("[^a-zA-Z0-9_.-]", "_") + ".bin.gz");
-                Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-                try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream(Files.newOutputStream(tmp))))) {
-                    out.writeInt(MAGIC);
-                    out.writeUTF(d.dim());
-                    out.writeInt(d.keys().length);
-                    for (int i = 0; i < d.keys().length; i++) {
-                        out.writeLong(d.keys()[i]);
-                        out.write(d.rgb()[i]);
-                    }
-                } catch (IOException e) {
-                    MultiCore.LOGGER.warn("[MultiCore] map: could not save {}: {}", file, e.toString());
-                    continue;
-                }
-                try {
-                    Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-                } catch (IOException e) {
-                    MultiCore.LOGGER.warn("[MultiCore] map: could not save {}: {}", file, e.toString());
-                }
-            }
-        }
+        this.file.saveInBackground(dir, this.chunks, Entry::rgb);
     }
 }

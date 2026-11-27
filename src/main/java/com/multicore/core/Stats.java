@@ -25,6 +25,8 @@ public final class Stats {
     public static final LongAdder WORLD_PAUSES = new LongAdder();
     public static final LongAdder WORLD_PAUSE_WAIT_NANOS = new LongAdder();
     public static final LongAdder WORLD_PAUSE_TIMEOUTS = new LongAdder();
+    /** World pauses a wait inside an item ended and the thread took back afterwards. */
+    public static final LongAdder WORLD_PAUSES_RESUMED = new LongAdder();
     public static final LongAdder WORLD_PAUSES_SKIPPED = new LongAdder();
     public static final LongAdder PLAYER_TICKS_MOVED = new LongAdder();
     public static final LongAdder PLAYER_PACKETS_MOVED = new LongAdder();

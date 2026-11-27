@@ -221,6 +221,7 @@ public final class ModLock {
     public static int suspend() {
         // A world pause this thread holds ends first (it keeps one hold of the lock): the wait may need the others.
         if (Thread.currentThread() instanceof LevelThread self) {
+            WorldPause.noteResume(self);
             WorldPause.end(self);
         }
         int count = LOCK.getHoldCount();
@@ -233,6 +234,10 @@ public final class ModLock {
     public static void restore(int count) {
         for (int i = 0; i < count; i++) {
             acquire(RESUMED);
+        }
+        // The wait ended this thread's world pause in the middle of an item: take it back (see WorldPause.noteResume).
+        if (Thread.currentThread() instanceof LevelThread self) {
+            WorldPause.resumeIfNeeded(self);
         }
     }
 
