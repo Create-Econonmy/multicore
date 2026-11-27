@@ -1,4 +1,4 @@
-MULTICORE SERVER 0.4.0 - SERVER INSTALL KIT  (mod id: multicore)
+MULTICORE SERVER 0.4.1 - SERVER INSTALL KIT  (mod id: multicore)
 ================================================================================
 NOT installed on the server. Everything here is staged only.
 
@@ -6,6 +6,21 @@ WHAT IT DOES
 Each dimension (South, Multiworld's shop/north/war/creative, hub, nether, end)
 ticks on CPU threads instead of one after another, and a busy world is split
 over as many region threads as it needs to keep 20 TPS.
+
+NEW IN 0.4.1 (fixes found after 0.4.0 froze the live server on 2026-11-26):
+  - The first-tick freeze: a thread setting up a class (Create's CapabilityMinecartController) waited for
+    the mod lock while the lock holder waited for that class. A thread inside a class initializer now stops
+    waiting after 100 ms. Regression test included.
+  - World pauses: a pause taken from an entity tick event (EntityTickEvent.Pre/Post) or ended by a chunk wait
+    is taken back, so cross-dimension item moves can no longer lose or duplicate items.
+  - The thread map's terrain save no longer stalls the server thread (it was quadratic: 16 s for 90,000
+    chunks, every 15 minutes); it now copies in milliseconds and writes in the background.
+  - Compat: Create Crafts & Additions energy networks in Multiworld worlds (they never get LevelEvent.Load),
+    Electronic Warfare 1.0.1 without CC: Tweaked. Both crashed the server even without MultiCore.
+  - Static guard rebuilt for the live server's exact 217 jars (tools/server-mods-2026-11-26.txt).
+  Tested: the live server's exact jars and configs (WorldEdit left out: memory on the test PC), all 107
+  GameTests including 15 chaos soak rounds, plus earlier multi-hour soaks. Not tested: a real server with
+  players, or the live world itself.
 
 NEW IN 0.4.0 (big change; switch it on in stages, see INSTALL-FOR-AI-AGENT.md):
 - EVERY MOD UNLOCKED (unlockAllMods = true): all mods' machines and event
@@ -56,7 +71,7 @@ Server-side only. Players do NOT need it, and it must NOT go in the modpack or
 the launcher's mirrorMods list.
 
 FILES
-  mods/multicore-0.4.0.jar        the mod
+  mods/multicore-0.4.1.jar        the mod
   config/multicore-common.toml    default config (created on first start anyway)
 
 TESTED WITH THE NEW MODS
@@ -67,7 +82,7 @@ TESTED WITH THE NEW MODS
   pickup) takes MultiCore's mod lock.
 
 INSTALL (server stopped; take a backup of the world first)
-1. Copy mods/multicore-0.4.0.jar into the server's mods/.
+1. Copy mods/multicore-0.4.1.jar into the server's mods/.
 2. Leave dimthread installed for the first start. While its gamerule
    dimthread_active is true (the default), MultiCore stands by and does
    nothing, so the first start is the same as today.
@@ -104,7 +119,7 @@ If MultiCore detects a threading error it logs it and switches itself to
 single-thread ticking for the rest of the session (fallbackToSerialOnError).
 
 REMOVING IT
-  Stop the server and delete mods/multicore-0.4.0.jar. It stores nothing in
+  Stop the server and delete mods/multicore-0.4.1.jar. It stores nothing in
   the world.
 
 ONCE IT HAS RUN WELL FOR A FEW DAYS
@@ -175,4 +190,4 @@ TEST NOTES (2026-11-15, local test server only)
     (NoClassDefFoundError dan200/computercraft/...), MultiCore on or off.
     Electronic Warfare was left out of the test.
 
-jar sha256 (multicore-0.4.0.jar): eba909d2f51518ede55f2dda0da371964b66e3f66228b4763d555e83968483c9
+jar sha256 (multicore-0.4.1.jar): 00c3b1f3cf34441d9eac71f5bcbd6b6cd3bf0b554c751e4335bdeb6e1b54784f
