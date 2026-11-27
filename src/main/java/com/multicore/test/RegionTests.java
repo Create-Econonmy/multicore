@@ -317,7 +317,9 @@ public final class RegionTests {
      * entity of another dimension must stop every other tick thread for the rest of that tick (a world pause), so not
      * one item is lost or made up. Before 0.4.0 nothing paused the nether here.
      */
-    @GameTest(template = "empty", batch = "world_pause_crossdim", timeoutTicks = 400)
+    // 1200 ticks: the work only starts once the nether pigs tick, and with the live server's 9 dimensions loading chunks
+    // at once that alone sometimes took more than the old 400 (soak 2026-11-26, "still running (0 ticks)").
+    @GameTest(template = "empty", batch = "world_pause_crossdim", timeoutTicks = 1200)
     public static void pullingFromAChestInAnotherDimensionLosesNothing(GameTestHelper helper) {
         listen();
         ServerLevel level = helper.getLevel();
@@ -375,7 +377,10 @@ public final class RegionTests {
             }
         });
         helper.succeedWhen(() -> {
-            helper.assertTrue(stop.get(), "still running (" + pullTicks.get() + " ticks)");
+            helper.assertTrue(stop.get(), "still running (" + pullTicks.get() + " pull ticks; " + insertsOnTickThreads.get()
+                    + " nether inserts on tick threads, 48 needed to start; nether chest there: "
+                    + (nether.getBlockEntity(chestPos) instanceof ChestBlockEntity) + "; nether pigs alive: "
+                    + b.stream().filter(p -> !p.isRemoved()).count() + "/" + b.size() + ")");
             int inChest = 0;
             if (nether.getBlockEntity(chestPos) instanceof ChestBlockEntity chest) {
                 for (int slot = 0; slot < chest.getContainerSize(); slot++) inChest += chest.getItem(slot).getCount();
