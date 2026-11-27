@@ -77,7 +77,7 @@ public final class ThreadMap {
             if (server.getTickCount() % SNAPSHOT_EVERY_TICKS == 0) snapshot(server);
             // Dimensions on their own thread colour their terrain there (afterLevelTick); only main-thread ones here.
             if (terrain) TERRAIN.work(server, TERRAIN_BUDGET_NANOS, ParallelTicker.get()::tickedOnOwnThread);
-            if (terrain && server.getTickCount() % (20 * 60 * 15) == 0) TERRAIN.save(dir(server));
+            if (terrain && server.getTickCount() % (20 * 60 * 15) == 0) TERRAIN.saveInBackground(dir(server));
         } catch (RuntimeException e) {
             if (!failed) {
                 failed = true;
