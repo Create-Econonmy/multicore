@@ -1,4 +1,4 @@
-MULTICORE SERVER 0.4.1 - SERVER INSTALL KIT  (mod id: multicore)
+MULTICORE SERVER 0.4.2 - SERVER INSTALL KIT  (mod id: multicore)
 ================================================================================
 NOT installed on the server. Everything here is staged only.
 
@@ -6,6 +6,14 @@ WHAT IT DOES
 Each dimension (South, Multiworld's shop/north/war/creative, hub, nether, end)
 ticks on CPU threads instead of one after another, and a busy world is split
 over as many region threads as it needs to keep 20 TPS.
+
+NEW IN 0.4.2:
+  - Fixes the freeze of 2026-11-28: two threads running KubeJS scripts could deadlock between the mod lock and
+    Rhino's own Java lock. Threads that take the mod lock now run scripts under that lock alone.
+  Tested: only a 512 MB test server with KubeJS and Rhino (regression test RhinoTests; it froze without the
+  fix). 12 repeat runs: no lock waits or script errors; 11 passed, 1 server process exited partway with no
+  error logged (cause unknown). Two earlier runs had test failures (block drops, cross-region chest pull),
+  not explained. NOT tested: the full mod pack, a production-style server. Unit tests pass.
 
 NEW IN 0.4.1 (fixes found after 0.4.0 froze the live server on 2026-11-26):
   - The first-tick freeze: a thread setting up a class (Create's CapabilityMinecartController) waited for
@@ -71,7 +79,7 @@ Server-side only. Players do NOT need it, and it must NOT go in the modpack or
 the launcher's mirrorMods list.
 
 FILES
-  mods/multicore-0.4.1.jar        the mod
+  mods/multicore-0.4.2.jar        the mod
   config/multicore-common.toml    default config (created on first start anyway)
 
 TESTED WITH THE NEW MODS
@@ -82,7 +90,7 @@ TESTED WITH THE NEW MODS
   pickup) takes MultiCore's mod lock.
 
 INSTALL (server stopped; take a backup of the world first)
-1. Copy mods/multicore-0.4.1.jar into the server's mods/.
+1. Copy mods/multicore-0.4.2.jar into the server's mods/.
 2. Leave dimthread installed for the first start. While its gamerule
    dimthread_active is true (the default), MultiCore stands by and does
    nothing, so the first start is the same as today.
@@ -119,7 +127,7 @@ If MultiCore detects a threading error it logs it and switches itself to
 single-thread ticking for the rest of the session (fallbackToSerialOnError).
 
 REMOVING IT
-  Stop the server and delete mods/multicore-0.4.1.jar. It stores nothing in
+  Stop the server and delete mods/multicore-0.4.2.jar. It stores nothing in
   the world.
 
 ONCE IT HAS RUN WELL FOR A FEW DAYS
@@ -190,4 +198,4 @@ TEST NOTES (2026-11-15, local test server only)
     (NoClassDefFoundError dan200/computercraft/...), MultiCore on or off.
     Electronic Warfare was left out of the test.
 
-jar sha256 (multicore-0.4.1.jar): 00c3b1f3cf34441d9eac71f5bcbd6b6cd3bf0b554c751e4335bdeb6e1b54784f
+jar sha256 (multicore-0.4.2.jar): a92caed28bcc3117ca31554e152a465e851c88bba9fbeae8b2cff1f88250b4b8

@@ -1,5 +1,7 @@
-# Installing MultiCore 0.4.1 on the Create Economy server: instructions for an AI agent
+# Installing MultiCore 0.4.2 on the Create Economy server: instructions for an AI agent
 
+> 0.4.2 fixes the KubeJS deadlock that froze 0.4.1 on 2026-11-28. See "NEW IN 0.4.2" in INSTALL.txt for what was and was not tested.
+>
 > 0.4.1 replaces 0.4.0, which froze the live server on its first tick on 2026-11-26. See "NEW IN 0.4.1" in INSTALL.txt for
 > what changed. Use the staged rollout below; do not jump straight to every mod unlocked.
 
@@ -63,7 +65,7 @@ every **CHECKPOINT** to report to the owner and wait for their go-ahead.
 ## 4. Before installing (read-only, then CHECKPOINT)
 
 1. **Find the files to install.** They're in this folder (`server-install/` of the MultiCore project on the owner's PC):
-   - `mods/multicore-0.4.1.jar`: the mod. Its SHA-256 must be `00c3b1f3cf34441d9eac71f5bcbd6b6cd3bf0b554c751e4335bdeb6e1b54784f` (also in `INSTALL.txt`).
+   - `mods/multicore-0.4.2.jar`: the mod. Its SHA-256 must be `a92caed28bcc3117ca31554e152a465e851c88bba9fbeae8b2cff1f88250b4b8` (also in `INSTALL.txt`).
    - `config/multicore-common.toml`: the default config. Optional; the mod writes it on first start anyway.
 2. **Compare the server's mods with the tested list.** List the server's `mods/` folder and compare it with
    `tools/server-mods-2026-11-15.txt` in the project (the mod list MultiCore was tested with). Report every jar that
@@ -80,7 +82,7 @@ every **CHECKPOINT** to report to the owner and wait for their go-ahead.
 
 ## 5. Install (server stopped)
 
-1. Copy `multicore-0.4.1.jar` into the server's `mods/`. If an older `multicore-*.jar` is there, move it out of
+1. Copy `multicore-0.4.2.jar` into the server's `mods/`. If an older `multicore-*.jar` is there, move it out of
    `mods/` (keep it in the backup); never have two versions in `mods/`.
 2. Copy `config/multicore-common.toml` into the server's `config/`, then in it set `unlockAllMods = false` (stages A
    and B run with mods locked, as 0.3 did; stage C unlocks them). If the server already has this file, keep a copy of
@@ -138,7 +140,7 @@ gamerule `dimthread_active false` is saved with the world.
 |---|---|
 | Something odd and region threads are on | `/multicore regions off` |
 | Still odd | `/multicore off` (plain single-thread ticking) or `/gamerule dimthread_active true` (back to dimthread) |
-| Server won't start or crashes on start | Stop it, move `mods/multicore-0.4.1.jar` out of `mods/`, start again. Nothing else to undo: MultiCore stores nothing in the world (its `config/multicore-common.toml` and `multicore-map/` folder can stay or go) |
+| Server won't start or crashes on start | Stop it, move `mods/multicore-0.4.2.jar` out of `mods/`, start again. Nothing else to undo: MultiCore stores nothing in the world (its `config/multicore-common.toml` and `multicore-map/` folder can stay or go) |
 
 ## 9. Later (only after several good days, and with the owner's yes)
 

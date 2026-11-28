@@ -1,7 +1,7 @@
-You are installing a server-side Minecraft mod, **MultiCore 0.4.1**, on my Create Economy server and testing it while nobody is online. I am the server owner and I am here to approve each step.
+You are installing a server-side Minecraft mod, **MultiCore 0.4.2**, on my Create Economy server and testing it while nobody is online. I am the server owner and I am here to approve each step.
 
 **Files:** the install kit is the folder `server-install` in my project `C:\Users\luket\mutile core server`:
-- `mods/multicore-0.4.1.jar`: the mod. Its SHA-256 must be `00c3b1f3cf34441d9eac71f5bcbd6b6cd3bf0b554c751e4335bdeb6e1b54784f`.
+- `mods/multicore-0.4.2.jar`: the mod. Its SHA-256 must be `a92caed28bcc3117ca31554e152a465e851c88bba9fbeae8b2cff1f88250b4b8`.
 - `config/multicore-common.toml`: its config.
 - `INSTALL-FOR-AI-AGENT.md`: the full step-by-step guide with checkpoints. **Read it completely before doing anything, and follow it.** `INSTALL.txt` has the background.
 - The mod list it was tested with is `tools/server-mods-2026-11-15.txt` in the project; the test pack itself is `run/gametest-next/mods`.

@@ -22,6 +22,7 @@
     "compat.openpartiesandclaims.ClaimCaptureInterfaceCarrier",
     "compat.ponder.WorldAttachedMixin",
     "compat.railways.MixinVariablesCarrier",
+    "compat.rhino.ContextMixin",
     "compat.rhino.InterpretedFunctionMixin",
     "compat.sable.RapierNativeLockCarrier",
     "compat.sable.RapierPhysicsPipelineMixin",
